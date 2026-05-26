@@ -530,8 +530,28 @@ async function fetchRealNetworkQuotes() {
     }
 
     if (data && data.chart && data.chart.result && data.chart.result[0]) {
-      const meta = data.chart.result[0].meta;
-      const price = meta.regularMarketPrice;
+      const chartResult = data.chart.result[0];
+      const meta = chartResult.meta;
+      
+      // 盤後防禦：多重管道獲取最新價格，防止 Yahoo 在收盤或休市後 regularMarketPrice 傳回空值
+      let price = meta.regularMarketPrice;
+      if (price === null || price === undefined || isNaN(price)) {
+        // Fallback 1: 嘗試從近期的 close 行情中取得最後一個非空收盤價
+        const closes = chartResult.indicators?.quote?.[0]?.close || [];
+        const validCloses = closes.filter(c => c !== null && c !== undefined && !isNaN(c));
+        if (validCloses.length > 0) {
+          price = validCloses[validCloses.length - 1];
+        }
+      }
+      if (price === null || price === undefined || isNaN(price)) {
+        // Fallback 2: 嘗試使用昨收價
+        price = meta.chartPreviousClose || meta.previousClose;
+      }
+      if (price === null || price === undefined || isNaN(price)) {
+        // Fallback 3: 使用本地備份價格
+        price = OFFLINE_PRICES_DATABASE[sym]?.price || 100.0;
+      }
+
       const prev = meta.chartPreviousClose || meta.previousClose || price;
       const change = parseFloat((price - prev).toFixed(2));
       const chgPct = prev > 0 ? parseFloat((change / prev * 100).toFixed(2)) : 0;
