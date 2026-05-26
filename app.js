@@ -1295,7 +1295,9 @@ async function renderHistoricalChart(ysym, range) {
   const currentPrice = realMarketPrices[ysym]?.price || 100.0;
   
   // 為了極佳相容性與離線流暢度，系統採取高逼真度真實走勢模擬算法生成歷史走勢
-  const points = range === "1D" ? 24 : (range === "1W" ? 7 : (range === "1M" ? 30 : (range === "3M" ? 90 : 12)));
+  const is1D = range === "1D";
+  const twseTimes = ["09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "12:00", "12:30", "13:00", "13:30"];
+  const points = is1D ? twseTimes.length : (range === "1W" ? 7 : (range === "1M" ? 30 : (range === "3M" ? 90 : 12)));
   let basePrice = currentPrice * (0.95 + Math.random() * 0.08); // 浮動基底
 
   for (let i = 0; i < points; i++) {
@@ -1311,8 +1313,8 @@ async function renderHistoricalChart(ysym, range) {
     }
 
     // 走勢橫軸標記
-    if (range === "1D") {
-      labels.push(`${String(i).padStart(2, "0")}:00`);
+    if (is1D) {
+      labels.push(twseTimes[i]);
     } else if (range === "1W") {
       labels.push(`Day ${i + 1}`);
     } else if (range === "1M" || range === "3M") {
