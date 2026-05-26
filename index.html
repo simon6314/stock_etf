@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>即時股票儀表板 | LiveStock Pro</title>
+  <meta name="description" content="即時動態股票行情儀表板，追蹤台股、美股即時報價與走勢圖" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- Animated background -->
+  <canvas id="bg-canvas"></canvas>
+
+  <!-- Header -->
+  <header class="header">
+    <div class="header-inner">
+      <div class="logo">
+        <div class="logo-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+            <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <polyline points="16 7 22 7 22 13" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <span class="logo-text">LiveStock <span class="logo-badge">PRO</span></span>
+      </div>
+
+      <div class="header-center">
+        <div class="market-status" id="market-status">
+          <span class="status-dot pulse"></span>
+          <span class="status-text" id="status-text">即時更新中</span>
+        </div>
+        <div class="divider-v"></div>
+        <div class="current-time" id="current-time">--:--:--</div>
+      </div>
+
+      <div class="header-right">
+        <div class="update-badge" id="update-badge">
+          <div class="spinner"></div>
+          <span>每3秒更新</span>
+        </div>
+        <button class="btn-add" id="btn-add" onclick="showAddModal()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+            <line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+            <line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+          </svg>
+          新增自選
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Ticker tape -->
+  <div class="ticker-tape-wrap">
+    <div class="ticker-tape" id="ticker-tape">
+      <div class="ticker-inner" id="ticker-inner"></div>
+    </div>
+  </div>
+
+  <!-- Main layout -->
+  <main class="main-layout">
+
+    <!-- Left sidebar: watchlist -->
+    <aside class="sidebar">
+      <!-- TAIEX Card -->
+      <div class="taiex-card">
+        <div class="tc-header">
+          <span class="tc-badge">台股大盤</span>
+          <span class="tc-title">加權指數 TAIEX</span>
+        </div>
+        <div class="tc-price-row">
+          <span class="tc-price" id="taiex-price">--</span>
+          <div class="tc-change" id="taiex-change">
+            <span class="chg-arrow" id="taiex-arrow">▲</span>
+            <span id="taiex-chg-val">--</span>
+            <span class="chg-pct" id="taiex-chg-pct">(--)</span>
+          </div>
+        </div>
+        <div class="tc-meta">
+          <span id="taiex-vol">成交額: --</span>
+          <span id="taiex-time">--:--:--</span>
+        </div>
+      </div>
+
+      <div class="sidebar-top">
+        <h2 class="sidebar-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" stroke="currentColor" stroke-width="2" fill="currentColor" opacity="0.9"/>
+          </svg>
+          自選持股
+        </h2>
+        <div class="sort-row">
+          <button class="sort-btn active" id="sb-name" onclick="sortBy('name', this)">名稱</button>
+          <button class="sort-btn" id="sb-chg" onclick="sortBy('change', this)">漲跌%</button>
+          <button class="sort-btn" id="sb-vol" onclick="sortBy('volume', this)">成交量</button>
+        </div>
+      </div>
+      <div class="stock-list" id="stock-list"></div>
+    </aside>
+
+    <!-- Right: detail -->
+    <section class="detail">
+
+      <!-- Portfolio Overview -->
+      <div id="portfolio-overview-wrap" class="detail-wrap">
+        <div class="portfolio-hero">
+          <div class="ph-left">
+            <div class="ph-title">我的投資組合績效</div>
+            <div class="ph-subtitle">即時動態資產損益總覽</div>
+          </div>
+          <div class="ph-right">
+            <div class="ph-price" id="p-total-value">--</div>
+            <div class="ph-change" id="p-total-return-row">
+              <span class="chg-arrow" id="p-return-arrow">▲</span>
+              <span id="p-total-return-val">--</span>
+              <span class="chg-pct" id="p-total-return-pct">(--)</span>
+            </div>
+            <div class="ph-updated" id="p-updated">更新於 --:--:--</div>
+          </div>
+        </div>
+
+        <!-- Portfolio Statistics Grid -->
+        <div class="portfolio-grid">
+          <div class="p-card">
+            <div class="pc-label">原始投入總成本</div>
+            <div class="pc-val" id="p-total-cost">--</div>
+            <div class="pc-subtext">買入價格 × 持有股數</div>
+          </div>
+          <div class="p-card">
+            <div class="pc-label">累計已領配息</div>
+            <div class="pc-val up" id="p-total-dividends">--</div>
+            <div class="pc-subtext">自買入日至今配息總和</div>
+          </div>
+          <div class="p-card">
+            <div class="pc-label">折抵配息後實際成本</div>
+            <div class="pc-val" id="p-net-cost">--</div>
+            <div class="pc-subtext">原始成本 - 累計已領配息</div>
+          </div>
+          <div class="p-card">
+            <div class="pc-label">帳面總盈虧 (不含息)</div>
+            <div class="pc-val" id="p-unrealized-gain">--</div>
+            <div class="pc-subtext">目前市值 - 原始成本</div>
+          </div>
+        </div>
+
+        <!-- Asset Allocation & Holdings Table -->
+        <div class="holdings-card">
+          <div class="hc-header">
+            <h3>持股明細及收益狀況</h3>
+            <span class="hc-count" id="p-holdings-count">共 0 檔</span>
+          </div>
+          <div class="holdings-table-wrap">
+            <table class="holdings-table">
+              <thead>
+                <tr>
+                  <th>標的</th>
+                  <th class="txt-r">持有股數</th>
+                  <th class="txt-r">買入均價 / 現價</th>
+                  <th class="txt-r">原始成本</th>
+                  <th class="txt-r">累計已領配息</th>
+                  <th class="txt-r">當前市值</th>
+                  <th class="txt-r">即時總收益 (含息)</th>
+                </tr>
+              </thead>
+              <tbody id="holdings-table-body">
+                <tr>
+                  <td colspan="7" class="empty-holdings">
+                    目前自選清單中尚無持股數據，請點擊「新增自選」填寫持股成本！
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stock Detail (Initially Hidden) -->
+      <div id="stock-detail-wrap" class="detail-wrap hidden">
+        <div class="detail-back-bar">
+          <button class="btn-back" onclick="showPortfolioOverview()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+              <line x1="19" y1="12" x2="5" y2="12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+              <polyline points="12 19 5 12 12 5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+            </svg>
+            返回投資組合總覽
+          </button>
+        </div>
+
+        <!-- Stock hero header -->
+        <div class="stock-hero" id="stock-hero">
+          <div class="hero-left">
+            <div class="hero-symbol-row">
+              <span class="hero-symbol" id="h-symbol">--</span>
+              <span class="hero-tag-badge etf" id="h-user-tag" style="display:none;">已持有</span>
+            </div>
+            <div class="hero-name" id="h-name">請選擇股票</div>
+            <div class="hero-tags" id="h-tags"></div>
+          </div>
+          <div class="hero-right">
+            <div class="hero-price" id="h-price">--</div>
+            <div class="hero-change" id="h-change">
+              <span class="chg-arrow" id="h-arrow">▲</span>
+              <span id="h-chg-val">--</span>
+              <span class="chg-pct" id="h-chg-pct">(--)</span>
+            </div>
+            <div class="hero-updated" id="h-updated">更新於 --:--:--</div>
+          </div>
+        </div>
+
+        <!-- User cost card (Shows if user bought this stock) -->
+        <div class="user-cost-card hidden" id="user-cost-card">
+          <div class="ucc-header">
+            <h4>我的持股投資分析</h4>
+            <span class="ucc-date" id="ucc-buy-date">買入日期: --</span>
+          </div>
+          <div class="ucc-grid">
+            <div class="ucc-item">
+              <span class="ucc-lbl">持有股數</span>
+              <span class="ucc-val" id="ucc-shares">--</span>
+            </div>
+            <div class="ucc-item">
+              <span class="ucc-lbl">買入均價</span>
+              <span class="ucc-val" id="ucc-buy-price">--</span>
+            </div>
+            <div class="ucc-item">
+              <span class="ucc-lbl">原始投入成本</span>
+              <span class="ucc-val" id="ucc-total-cost">--</span>
+            </div>
+            <div class="ucc-item">
+              <span class="ucc-lbl">累計已領配息</span>
+              <span class="ucc-val up" id="ucc-total-dividends">--</span>
+            </div>
+            <div class="ucc-item">
+              <span class="ucc-lbl">目前市值</span>
+              <span class="ucc-val" id="ucc-market-value">--</span>
+            </div>
+            <div class="ucc-item">
+              <span class="ucc-lbl">折抵後實際成本</span>
+              <span class="ucc-val" id="ucc-net-cost">--</span>
+            </div>
+            <div class="ucc-item tall">
+              <span class="ucc-lbl">帳面損益 (不含息)</span>
+              <span class="ucc-val" id="ucc-capital-gain">--</span>
+            </div>
+            <div class="ucc-item tall highlight">
+              <span class="ucc-lbl">即時總收益 (含息)</span>
+              <span class="ucc-val" id="ucc-total-return">--</span>
+            </div>
+          </div>
+          <!-- Dividend detail list -->
+          <div class="ucc-dividend-details">
+            <h5>歷史配息明細計算 <span id="ucc-div-count">(--)</span></h5>
+            <div class="ucc-div-list" id="ucc-div-list">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Chart -->
+        <div class="chart-card">
+          <div class="chart-toolbar">
+            <div class="time-tabs" id="time-tabs">
+              <button class="ttab active" data-range="1D" onclick="setRange('1D',this)">1日</button>
+              <button class="ttab" data-range="1W" onclick="setRange('1W',this)">1週</button>
+              <button class="ttab" data-range="1M" onclick="setRange('1M',this)">1月</button>
+              <button class="ttab" data-range="3M" onclick="setRange('3M',this)">3月</button>
+              <button class="ttab" data-range="1Y" onclick="setRange('1Y',this)">1年</button>
+            </div>
+            <div class="mini-stats">
+              <div class="mini-stat">
+                <span class="ms-label">最高</span>
+                <span class="ms-val up" id="ms-high">--</span>
+              </div>
+              <div class="mini-stat">
+                <span class="ms-label">最低</span>
+                <span class="ms-val down" id="ms-low">--</span>
+              </div>
+              <div class="mini-stat">
+                <span class="ms-label">成交量</span>
+                <span class="ms-val" id="ms-vol">--</span>
+              </div>
+            </div>
+          </div>
+          <div class="chart-wrap">
+            <canvas id="main-chart"></canvas>
+          </div>
+        </div>
+
+        <!-- Info grid -->
+        <div class="info-grid">
+          <div class="info-card">
+            <div class="ic-label">開盤價</div>
+            <div class="ic-val" id="ic-open">--</div>
+          </div>
+          <div class="info-card">
+            <div class="ic-label">昨日收盤</div>
+            <div class="ic-val" id="ic-prev">--</div>
+          </div>
+          <div class="info-card">
+            <div class="ic-label">今日最高</div>
+            <div class="ic-val up" id="ic-high">--</div>
+          </div>
+          <div class="info-card">
+            <div class="ic-label">今日最低</div>
+            <div class="ic-val down" id="ic-low">--</div>
+          </div>
+          <div class="info-card">
+            <div class="ic-label">成交量</div>
+            <div class="ic-val" id="ic-vol">--</div>
+          </div>
+          <div class="info-card">
+            <div class="ic-label">市值</div>
+            <div class="ic-val" id="ic-mktcap">--</div>
+          </div>
+          <div class="info-card">
+            <div class="ic-label">本益比 (P/E)</div>
+            <div class="ic-val" id="ic-pe">--</div>
+          </div>
+          <div class="info-card">
+            <div class="ic-label">殖利率</div>
+            <div class="ic-val up" id="ic-yield">--</div>
+          </div>
+          <div class="info-card">
+            <div class="ic-label">52週最高</div>
+            <div class="ic-val up" id="ic-52h">--</div>
+          </div>
+          <div class="info-card">
+            <div class="ic-label">52週最低</div>
+            <div class="ic-val down" id="ic-52l">--</div>
+          </div>
+          <div class="info-card">
+            <div class="ic-label">Beta值</div>
+            <div class="ic-val" id="ic-beta">--</div>
+          </div>
+          <div class="info-card">
+            <div class="ic-label">EPS</div>
+            <div class="ic-val" id="ic-eps">--</div>
+          </div>
+        </div>
+
+        <!-- News -->
+        <div class="news-panel">
+          <h3 class="news-hdr">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M18 14h-8M15 18h-5M10 6h8v4h-8z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            相關新聞
+          </h3>
+          <div class="news-list" id="news-list"></div>
+        </div>
+      </div>
+
+    </section>
+  </main>
+
+  <!-- Add modal (Two Steps) -->
+  <div class="modal-bg" id="modal-bg" onclick="handleModalBgClick(event)">
+    <div class="modal" id="add-modal">
+      <div class="modal-header">
+        <h3 id="modal-title">新增自選股</h3>
+        <button class="modal-close" onclick="closeAddModal()">✕</button>
+      </div>
+      
+      <!-- Step 1: Search -->
+      <div id="modal-step-search">
+        <div class="modal-search">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
+            <circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="2"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          <input id="srch-input" type="text" placeholder="搜尋股票代號或名稱..." autocomplete="off" oninput="onSearchInput(this.value)" />
+        </div>
+        <div class="modal-results" id="modal-results"></div>
+      </div>
+
+      <!-- Step 2: Set Cost Setup (Initially Hidden) -->
+      <div id="modal-step-setup" class="hidden">
+        <div class="modal-selected-info">
+          <div class="selected-stock-title">
+            <span id="setup-symbol">--</span>
+            <span id="setup-name">--</span>
+          </div>
+          <div class="selected-stock-price-box">
+            <span class="selected-stock-lbl">當前價</span>
+            <span class="selected-stock-price" id="setup-current-price">--</span>
+          </div>
+        </div>
+        
+        <div class="modal-form-body">
+          <div class="modal-form-group">
+            <label for="setup-date">購買日期</label>
+            <input type="date" id="setup-date" required>
+            <span class="form-help">我們將自動為您比對自此日期以後的真實歷史除息紀錄</span>
+          </div>
+          
+          <div class="modal-form-row">
+            <div class="modal-form-group">
+              <label for="setup-price">購買單價 (元/股)</label>
+              <input type="number" step="0.01" id="setup-price" placeholder="例如 830" required>
+            </div>
+            <div class="modal-form-group">
+              <label for="setup-shares">持有股數 (股)</label>
+              <input type="number" step="1" id="setup-shares" placeholder="例如 1000" required>
+            </div>
+          </div>
+        </div>
+        
+        <div class="modal-actions">
+          <button class="btn-modal btn-back-step" onclick="showModalStep('search')">上一步</button>
+          <button class="btn-modal btn-confirm-step" onclick="confirmAddStock()">確認加入自選</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mobile Fixed Bottom Navigation Tab Bar -->
+  <nav class="bottom-nav">
+    <button class="nav-item active" id="nav-watchlist" onclick="switchMobileTab('watchlist')">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" stroke="currentColor" stroke-width="2" fill="currentColor"/>
+      </svg>
+      <span>行情自選</span>
+    </button>
+    <button class="nav-item" id="nav-detail" onclick="switchMobileTab('detail')">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+        <rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="2"/>
+        <line x1="9" y1="9" x2="15" y2="9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <line x1="9" y1="13" x2="15" y2="13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <line x1="9" y1="17" x2="13" y2="17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      <span>績效詳情</span>
+    </button>
+  </nav>
+
+  <!-- Toast -->
+  <div class="toasts" id="toasts"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
