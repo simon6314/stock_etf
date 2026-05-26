@@ -192,7 +192,7 @@ const OFFLINE_PRICES_DATABASE = {
   "0050.TW": { price: 320.50, change: 4.50, chgPct: 1.42, vol: "14.2k張", open: 316.0, prev: 316.0, high: 322.0, low: 315.5, mktcap: "4280億", pe: 22.4, yield: 3.62, high52: 335.0, low52: 158.0, beta: 1.00, eps: 14.50 },
   "2317.TW": { price: 252.00, change: 5.50, chgPct: 2.23, vol: "38.5k張", open: 246.5, prev: 246.5, high: 254.0, low: 246.0, mktcap: "3.49兆", pe: 18.2, yield: 2.96, high52: 262.0, low52: 105.0, beta: 0.95, eps: 13.50 },
   "2454.TW": { price: 2450.00, change: 45.00, chgPct: 1.87, vol: "5.1k張", open: 2405, prev: 2405, high: 2470, low: 2390, mktcap: "3.92兆", pe: 24.5, yield: 5.12, high52: 2550, low52: 1100, beta: 1.20, eps: 95.50 },
-  "2392.TW": { price: 38.60, change: 0.55, chgPct: 1.45, vol: "8.5k張", open: 38.65, prev: 38.05, high: 39.00, low: 37.80, mktcap: "198億", pe: 11.2, yield: 6.48, high52: 45.2, low52: 31.5, beta: 0.92, eps: 3.45 },
+  "2392.TW": { price: 72.50, change: 1.20, chgPct: 1.68, vol: "12.5k張", open: 71.5, prev: 71.3, high: 73.0, low: 71.2, mktcap: "372億", pe: 15.6, yield: 3.45, high52: 85.0, low52: 32.2, beta: 0.95, eps: 4.65 },
   "2303.TW": { price: 82.50, change: 0.80, chgPct: 0.98, vol: "32.2k張", open: 81.7, prev: 81.7, high: 83.1, low: 81.5, mktcap: "1.03兆", pe: 11.2, yield: 5.68, high52: 88.5, low52: 48.2, beta: 0.90, eps: 6.80 },
   "2308.TW": { price: 512.50, change: 8.50, chgPct: 1.69, vol: "6.5k張", open: 504, prev: 504, high: 516, low: 502, mktcap: "1.33兆", pe: 25.3, yield: 2.18, high52: 540, low52: 295, beta: 1.05, eps: 18.50 },
   "2881.TW": { price: 112.00, change: 1.50, chgPct: 1.36, vol: "22.2k張", open: 110.5, prev: 110.5, high: 113.0, low: 110.0, mktcap: "1.45兆", pe: 12.8, yield: 4.07, high52: 118.0, low52: 65.5, beta: 0.78, eps: 8.50 },
@@ -211,6 +211,7 @@ let mobileActiveTab = "watchlist"; // 行動端當前分頁：'watchlist' 或 'd
 let sortingBy = "name"; // 排序模式: 'name', 'change', 'volume'
 let isOfflineMode = false; // 是否因跨域阻擋或網路問題啟動本地備份行情
 let selectedStockForSetup = null; // Modal 步驟二暫存選中要設定成本的股票
+let hasFetchedClosedData = false; // 盤後是否已成功拉取過一次最新的真實收盤行情
 
 // ==========================================
 // 4. 初始化應用程式
@@ -250,6 +251,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // 渲染自選列表與績效總覽
   renderWatchlist();
   updatePortfolioOverview();
+  updateDomTickers(); // 網頁載入瞬間即填入初始/昨收數據，拒絕 `--` 留白！
   
   // 偵測視窗大小，適配手機版頁面
   window.addEventListener("resize", handleWindowResize);
@@ -488,6 +490,13 @@ function getMockDefaultWatchlist() {
 // 7. Yahoo Finance API 真實行情抓取 (跨來源 CORS 代理轉發)
 // ==========================================
 async function fetchRealNetworkQuotes() {
+  // 如果目前非台股交易時間 (已收盤)，且先前已經成功獲取過一次真實收盤數據，則智慧阻斷，徹底凍結價格！
+  if (!isMarketOpen() && hasFetchedClosedData) {
+    updateDomTickers();
+    updatePortfolioOverview();
+    return;
+  }
+
   // 將需要獲取的代號整合（大盤加上自選股）
   const symbolsToFetch = ["^TWII"];
   watchlist.forEach(item => {
@@ -529,7 +538,7 @@ async function fetchRealNetworkQuotes() {
       }
     }
 
-    if (data && data.chart && data.chart.result && data.chart.result[0]) {
+    if (data && data?.chart?.result?.[0]) {
       const chartResult = data.chart.result[0];
       const meta = chartResult.meta;
       
@@ -577,9 +586,11 @@ async function fetchRealNetworkQuotes() {
       };
       successCount++;
     } else {
-      // 若該標的代理抓取皆失敗，優雅降級使用本地最新數據作為防禦
-      if (!realMarketPrices[sym] && OFFLINE_PRICES_DATABASE[sym]) {
-        realMarketPrices[sym] = { ...OFFLINE_PRICES_DATABASE[sym] };
+      // 若該標的代理抓取皆失敗，僅在無任何歷史真實快取或為預設值時，才降級使用備份庫價格，避免抹除最新真實收盤價！
+      if (!realMarketPrices[sym] || realMarketPrices[sym].price === OFFLINE_PRICES_DATABASE[sym]?.price) {
+        if (OFFLINE_PRICES_DATABASE[sym]) {
+          realMarketPrices[sym] = { ...OFFLINE_PRICES_DATABASE[sym] };
+        }
       }
     }
   });
@@ -606,11 +617,18 @@ async function fetchRealNetworkQuotes() {
 
   // 行情更新完畢後，智能感應交易時間並重新渲染大盤指示燈、列表與總覽績效
   updateMarketStatusUi();
+  updateDomTickers(); // 網路行情拉取完畢後，立刻精準更新大盤與詳情卡片 DOM！
   renderWatchlist();
   updatePortfolioOverview();
   
   if (currentActiveSymbol) {
     updateStockDetailPanel(currentActiveSymbol);
+  }
+
+  // 如果是在收盤時間，且此次成功獲取了網路數據，則標記為已成功拉取，後續智慧凍結
+  if (!isMarketOpen() && successCount > 0) {
+    hasFetchedClosedData = true;
+    console.log("[盤後智慧鎖定] 成功獲取今日最終收盤價，已啟動價格完美凍結機制。");
   }
 }
 
