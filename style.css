@@ -1132,6 +1132,33 @@ body {
   padding: 3px 9px;
   border-radius: 20px;
 }
+.hc-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.btn-action-small {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-sec);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.btn-action-small:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--border2);
+  color: var(--text-pri);
+}
+.btn-action-small:active {
+  transform: scale(0.97);
+}
 .holdings-table-wrap {
   overflow-x: auto;
   border: 1px solid var(--border);

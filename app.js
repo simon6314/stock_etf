@@ -569,9 +569,6 @@ async function fetchRealNetworkQuotes() {
     
     if (successCount > 0) {
       isOfflineMode = false;
-      document.getElementById("status-text").textContent = "即時真實價格";
-      document.getElementById("market-status").style.borderColor = "rgba(16,217,138,0.2)";
-      document.getElementById("market-status").style.backgroundColor = "rgba(16,217,138,0.12)";
     } else {
       throw new Error("所有自選股之 CORS 代理皆讀取失敗");
     }
@@ -585,14 +582,10 @@ async function fetchRealNetworkQuotes() {
         realMarketPrices[sym] = { ...OFFLINE_PRICES_DATABASE[sym] };
       }
     });
-
-    document.getElementById("status-text").textContent = "真實行情+本地波動";
-    document.getElementById("market-status").style.borderColor = "rgba(245, 197, 24, 0.25)";
-    document.getElementById("market-status").style.backgroundColor = "rgba(245, 197, 24, 0.08)";
   }
 
-  // 行情更新完畢後重新渲染介面
-  document.getElementById("update-badge").innerHTML = `<div class="spinner" style="animation-duration: 3s;"></div><span>每3秒動態跳動</span>`;
+  // 行情更新完畢後，智能感應交易時間並重新渲染大盤指示燈、列表與總覽績效
+  updateMarketStatusUi();
   renderWatchlist();
   updatePortfolioOverview();
   
@@ -604,7 +597,85 @@ async function fetchRealNetworkQuotes() {
 // ==========================================
 // 8. 盤中毫秒級微幅跳動引擎 (Real-time Live Tick Engine)
 // ==========================================
+// 智能判定當下是否為台股正常盤中交易時間 (週一至週五 09:00 ~ 13:30)
+function isMarketOpen() {
+  const now = new Date();
+  
+  // 取得台灣時間 (台北時區 GMT+8)
+  const twTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Taipei" }));
+  const day = twTime.getDay(); // 0 是週日，6 是週六
+  const hours = twTime.getHours();
+  const minutes = twTime.getMinutes();
+  
+  // 週六、週日不開盤交易
+  if (day === 0 || day === 6) return false;
+  
+  // 交易時間：09:00 - 13:30
+  const timeInMinutes = hours * 60 + minutes;
+  const startInMinutes = 9 * 60;        // 09:00
+  const endInMinutes = 13 * 60 + 30;    // 13:30
+  
+  return timeInMinutes >= startInMinutes && timeInMinutes < endInMinutes;
+}
+
+// 根據台股交易開收盤狀態，動態渲染指示燈與更新頻率徽章
+function updateMarketStatusUi() {
+  const statusText = document.getElementById("status-text");
+  const marketStatus = document.getElementById("market-status");
+  const statusDot = document.querySelector(".status-dot");
+  const updateBadge = document.getElementById("update-badge");
+  
+  if (isMarketOpen()) {
+    // 1. 盤中開盤時間：顯示高亮綠燈/黃燈呼吸閃爍
+    if (statusDot) {
+      statusDot.style.backgroundColor = "var(--up)";
+      statusDot.classList.add("pulse");
+    }
+    
+    if (isOfflineMode) {
+      if (statusText) statusText.textContent = "真實行情+本地波動";
+      if (marketStatus) {
+        marketStatus.style.borderColor = "rgba(245, 197, 24, 0.25)";
+        marketStatus.style.backgroundColor = "rgba(245, 197, 24, 0.08)";
+        marketStatus.style.color = "var(--gold)";
+      }
+    } else {
+      if (statusText) statusText.textContent = "即時真實價格";
+      if (marketStatus) {
+        marketStatus.style.borderColor = "rgba(16,217,138,0.2)";
+        marketStatus.style.backgroundColor = "rgba(16,217,138,0.12)";
+        marketStatus.style.color = "var(--up)";
+      }
+    }
+    
+    if (updateBadge) {
+      updateBadge.innerHTML = `<div class="spinner" style="animation-duration: 3s;"></div><span>每3秒動態跳動</span>`;
+    }
+  } else {
+    // 2. 盤後收盤時間：熄滅呼吸綠燈，改為極緻沉穩灰色
+    if (statusDot) {
+      statusDot.style.backgroundColor = "var(--text-sec)";
+      statusDot.classList.remove("pulse");
+    }
+    if (statusText) statusText.textContent = "台股已收盤 (Market Closed)";
+    if (marketStatus) {
+      marketStatus.style.borderColor = "rgba(255, 255, 255, 0.12)";
+      marketStatus.style.backgroundColor = "rgba(255, 255, 255, 0.05)";
+      marketStatus.style.color = "var(--text-sec)";
+    }
+    if (updateBadge) {
+      updateBadge.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" style="color:var(--text-sec); opacity: 0.8; vertical-align: middle;"><path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="currentColor" stroke-width="2.5"/><path d="M12 6V12L16 14" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg><span style="margin-left: 5px;">盤後維持收盤價</span>`;
+    }
+  }
+}
+
 function tickMarketPrices() {
+  // 智能防禦：若目前非台股交易時間 (已收盤)，立刻停止任何隨機微波動，價格與損益鎖定在今日最終收盤價！
+  if (!isMarketOpen()) {
+    updateMarketStatusUi(); // 確保收盤 UI 指示燈狀態完美更新
+    return;
+  }
+
   // 對目前所有在快取中的價格進行極細微隨機波動 (上下 0.02% 浮動)，模擬即時交易市場
   Object.keys(realMarketPrices).forEach(sym => {
     const data = realMarketPrices[sym];
@@ -1811,4 +1882,118 @@ function initBackgroundCanvas() {
   }
 
   animate();
+}
+
+// ==========================================
+// 16. 自選資產數據一鍵備份與還原模組 (Backup & Restore)
+// ==========================================
+
+// 一鍵匯出/備份自選股與買入明細數據，生成 JSON 檔案供使用者下載至手機或電腦，吃下 100% 定心丸！
+function exportWatchlist() {
+  if (watchlist.length === 0) {
+    showToast("目前自選清單為空，無須備份！", "error");
+    return;
+  }
+  
+  try {
+    const dataStr = JSON.stringify(watchlist, null, 2);
+    const blob = new Blob([dataStr], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    
+    const now = new Date();
+    const dateStr = now.toISOString().split("T")[0];
+    const filename = `livestock_watchlist_backup_${dateStr}.json`;
+    
+    const tempAnchor = document.createElement("a");
+    tempAnchor.href = url;
+    tempAnchor.download = filename;
+    
+    document.body.appendChild(tempAnchor);
+    tempAnchor.click();
+    document.body.removeChild(tempAnchor);
+    URL.revokeObjectURL(url);
+    
+    showToast("資產數據備份成功，已成功下載備份檔！", "success");
+  } catch (e) {
+    console.error("備份失敗:", e);
+    showToast("資產備份失敗，請稍後再試！", "error");
+  }
+}
+
+// 一鍵匯入/還原自選股數據，支援上傳先前備份的 JSON 檔案，瞬間完美復活所有自選與明細！
+function importWatchlist() {
+  const fileInput = document.createElement("input");
+  fileInput.type = "file";
+  fileInput.accept = ".json";
+  
+  fileInput.onchange = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const importedData = JSON.parse(e.target.result);
+        
+        // 基本資料結構校驗，防範不當 JSON 匯入
+        if (!Array.isArray(importedData)) {
+          throw new Error("格式錯誤：備份數據必須為陣列結構");
+        }
+        
+        const isValid = importedData.every(item => 
+          item.symbol && 
+          item.ysym && 
+          Array.isArray(item.transactions || item.transactions === undefined)
+        );
+        
+        if (!isValid) {
+          throw new Error("資料校驗失敗：欄位格式不符");
+        }
+        
+        // 匯入前再次相容格式遷移
+        importedData.forEach(item => {
+          if (!item.transactions) {
+            item.transactions = [
+              {
+                id: "tx_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
+                buyDate: item.buyDate || "2024-01-01",
+                buyPrice: item.buyPrice || 100,
+                shares: item.shares || 1000
+              }
+            ];
+            delete item.buyDate;
+            delete item.buyPrice;
+            delete item.shares;
+          }
+        });
+        
+        // 確認覆蓋匯入
+        if (confirm(`確認要匯入該備份檔案嗎？這將覆蓋您手機現有的自選股與所有交易紀錄！`)) {
+          watchlist = importedData;
+          saveWatchlistToStorage();
+          
+          // 立即重新獲取新匯入個股的最新價格並渲染介面
+          watchlist.forEach(item => {
+            if (!realMarketPrices[item.ysym] && OFFLINE_PRICES_DATABASE[item.ysym]) {
+              realMarketPrices[item.ysym] = { ...OFFLINE_PRICES_DATABASE[item.ysym] };
+            }
+          });
+          
+          showToast("資產還原成功！所有交易紀錄已完美復活！", "success");
+          
+          // 全面刷新數據
+          fetchRealNetworkQuotes();
+          renderWatchlist();
+          updatePortfolioOverview();
+          showPortfolioOverview();
+        }
+      } catch (err) {
+        console.error("還原失敗:", err);
+        alert(`匯入失敗，請確認檔案格式是否正確！\n錯誤原因：${err.message}`);
+      }
+    };
+    reader.readAsText(file);
+  };
+  
+  fileInput.click();
 }

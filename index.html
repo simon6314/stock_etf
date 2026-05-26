@@ -171,7 +171,11 @@
         <div class="holdings-card">
           <div class="hc-header">
             <h3>持股明細及收益狀況</h3>
-            <span class="hc-count" id="p-holdings-count">共 0 檔</span>
+            <div class="hc-actions">
+              <button class="btn-action-small" onclick="exportWatchlist()">📥 備份數據</button>
+              <button class="btn-action-small" onclick="importWatchlist()">📤 還原數據</button>
+              <span class="hc-count" id="p-holdings-count">共 0 檔</span>
+            </div>
           </div>
           <div class="holdings-table-wrap">
             <table class="holdings-table">
