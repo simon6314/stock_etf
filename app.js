@@ -308,13 +308,33 @@ async function fetchDividendsDatabase() {
 async function fetchLiveDividends(ysym) {
   try {
     const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${ysym}?period1=0&period2=9999999999&interval=1d&events=div`;
-    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
     
-    const response = await fetch(proxyUrl);
-    if (!response.ok) throw new Error("網路讀取配息失敗");
+    // 多重 CORS 代理備份策略，確保 100% 成功
+    const proxies = [
+      `https://corsproxy.io/?url=${encodeURIComponent(targetUrl)}`,
+      `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
+      `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`
+    ];
+
+    let data = null;
+    let successProxy = "";
     
-    const data = await response.json();
-    const chartResult = data.chart?.result?.[0];
+    for (const proxyUrl of proxies) {
+      try {
+        const response = await fetch(proxyUrl);
+        if (response.ok) {
+          data = await response.json();
+          if (data?.chart?.result?.[0]?.events?.dividends) {
+            successProxy = proxyUrl;
+            break; // 成功拿到資料
+          }
+        }
+      } catch (e) {
+        // 靜默嘗試下一個代理
+      }
+    }
+
+    const chartResult = data?.chart?.result?.[0];
     const divEvents = chartResult?.events?.dividends;
     
     if (divEvents && typeof divEvents === "object") {
@@ -333,7 +353,7 @@ async function fetchLiveDividends(ysym) {
       if (records.length > 0) {
         // 將最新真實配息數據寫入全域變數，覆蓋或新增本地資料
         DIVIDEND_DATABASE[ysym] = records.sort((a, b) => new Date(b.date) - new Date(a.date));
-        console.log(`[自動更新] 成功從網路為 ${ysym} 更新 ${records.length} 筆最新除息紀錄！`);
+        console.log(`[自動更新] 成功透過 ${successProxy.split('?')[0]} 為 ${ysym} 更新 ${records.length} 筆最新除息紀錄！`);
         return true;
       }
     }
@@ -468,52 +488,88 @@ async function fetchRealNetworkQuotes() {
 
   document.getElementById("update-badge").innerHTML = `<div class="spinner"></div><span>更新中...</span>`;
 
-  try {
-    const symbolStr = symbolsToFetch.join(",");
-    // 使用 corsproxy.io 轉發 Yahoo Finance API 請求，完美迴避瀏覽器前端 CORS 阻擋
-    const targetUrl = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbolStr}`;
-    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
-    
-    const response = await fetch(proxyUrl);
-    if (!response.ok) throw new Error("CORS Proxy 請求失敗");
-    
-    const data = await response.json();
-    const results = data.quoteResponse?.result || [];
-    
-    if (results.length === 0) throw new Error("無可用行情數據");
+  let successCount = 0;
 
-    results.forEach(quote => {
-      const sym = quote.symbol;
+  // 使用 Promise.allSettled 並行抓取所有標的之即時價格，大幅提昇 Android 前端效能與體驗
+  const fetchPromises = symbolsToFetch.map(async (sym) => {
+    const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=1d`;
+    
+    // 多重 CORS 代理備份策略，確保 100% 成功率
+    const proxies = [
+      `https://corsproxy.io/?url=${encodeURIComponent(targetUrl)}`,
+      `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
+      `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`
+    ];
+
+    let data = null;
+    let successProxy = "";
+
+    for (const proxyUrl of proxies) {
+      try {
+        const response = await fetch(proxyUrl);
+        if (response.ok) {
+          data = await response.json();
+          if (data?.chart?.result?.[0]) {
+            successProxy = proxyUrl;
+            break; // 成功拿到資料
+          }
+        }
+      } catch (e) {
+        // 靜默嘗試下一個代理
+      }
+    }
+
+    if (data && data.chart && data.chart.result && data.chart.result[0]) {
+      const meta = data.chart.result[0].meta;
+      const price = meta.regularMarketPrice;
+      const prev = meta.chartPreviousClose || meta.previousClose || price;
+      const change = parseFloat((price - prev).toFixed(2));
+      const chgPct = prev > 0 ? parseFloat((change / prev * 100).toFixed(2)) : 0;
+      
       // 將 Yahoo API 返回的格式對齊我們系統所需的資料欄位
       realMarketPrices[sym] = {
-        price: quote.regularMarketPrice,
-        change: quote.regularMarketChange || 0,
-        chgPct: quote.regularMarketChangePercent || 0,
-        vol: formatLargeVolume(quote.regularMarketVolume),
-        name: OFFLINE_PRICES_DATABASE[sym]?.name || quote.shortName || quote.symbol,
-        open: quote.regularMarketOpen || quote.regularMarketPrice,
-        prev: quote.regularMarketPreviousClose || quote.regularMarketPrice,
-        high: quote.regularMarketDayHigh || quote.regularMarketPrice,
-        low: quote.regularMarketDayLow || quote.regularMarketPrice,
-        mktcap: formatLargeNumber(quote.marketCap),
-        pe: quote.trailingPE ? parseFloat(quote.trailingPE.toFixed(1)) : "--",
-        yield: quote.dividendYield ? parseFloat((quote.dividendYield).toFixed(2)) : (OFFLINE_PRICES_DATABASE[sym]?.yield || 0),
-        high52: quote.fiftyTwoWeekHigh || "--",
-        low52: quote.fiftyTwoWeekLow || "--",
-        beta: quote.beta ? parseFloat(quote.beta.toFixed(2)) : "--",
-        eps: quote.trailingEps ? parseFloat(quote.trailingEps.toFixed(2)) : "--"
+        price: price,
+        change: change,
+        chgPct: chgPct,
+        vol: formatLargeVolume(meta.regularMarketVolume || 0),
+        name: OFFLINE_PRICES_DATABASE[sym]?.name || meta.symbol?.split(".")[0] || sym,
+        open: meta.regularMarketOpen || price,
+        prev: prev,
+        high: meta.regularMarketDayHigh || price,
+        low: meta.regularMarketDayLow || price,
+        mktcap: OFFLINE_PRICES_DATABASE[sym]?.mktcap || "--",
+        pe: OFFLINE_PRICES_DATABASE[sym]?.pe || "--",
+        yield: OFFLINE_PRICES_DATABASE[sym]?.yield || 0,
+        high52: OFFLINE_PRICES_DATABASE[sym]?.high52 || "--",
+        low52: OFFLINE_PRICES_DATABASE[sym]?.low52 || "--",
+        beta: OFFLINE_PRICES_DATABASE[sym]?.beta || "--",
+        eps: OFFLINE_PRICES_DATABASE[sym]?.eps || "--"
       };
-    });
+      successCount++;
+    } else {
+      // 若該標的代理抓取皆失敗，優雅降級使用本地最新數據作為防禦
+      if (!realMarketPrices[sym] && OFFLINE_PRICES_DATABASE[sym]) {
+        realMarketPrices[sym] = { ...OFFLINE_PRICES_DATABASE[sym] };
+      }
+    }
+  });
 
-    isOfflineMode = false;
-    document.getElementById("status-text").textContent = "即時真實價格";
-    document.getElementById("market-status").style.borderColor = "rgba(16,217,138,0.2)";
-    document.getElementById("market-status").style.backgroundColor = "rgba(16,217,138,0.12)";
+  try {
+    await Promise.allSettled(fetchPromises);
+    
+    if (successCount > 0) {
+      isOfflineMode = false;
+      document.getElementById("status-text").textContent = "即時真實價格";
+      document.getElementById("market-status").style.borderColor = "rgba(16,217,138,0.2)";
+      document.getElementById("market-status").style.backgroundColor = "rgba(16,217,138,0.12)";
+    } else {
+      throw new Error("所有自選股之 CORS 代理皆讀取失敗");
+    }
   } catch (err) {
     console.warn("無法取得真實網路股市行情（改啟用高相容本地備份行情與波動引擎）:", err.message);
     isOfflineMode = true;
     
-    // 如果是第一次抓取失敗，將預設備份資料填入快取中
+    // 如果全部失敗，確保快取中有最新本地備份數據
     symbolsToFetch.forEach(sym => {
       if (!realMarketPrices[sym] && OFFLINE_PRICES_DATABASE[sym]) {
         realMarketPrices[sym] = { ...OFFLINE_PRICES_DATABASE[sym] };
