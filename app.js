@@ -172,20 +172,21 @@ const SEARCHABLE_STOCKS = [
 ];
 
 // 當網路 API 失效或 CORS proxy 阻擋時使用的本地備份行情
+// 當網路 API 失效或 CORS proxy 阻擋時使用的本地備份行情
 const OFFLINE_PRICES_DATABASE = {
-  "^TWII": { price: 21568.42, change: 184.21, chgPct: 0.86, vol: "4125億", name: "加權指數" },
-  "2330.TW": { price: 835.00, change: 15.00, chgPct: 1.83, vol: "32.4k張", open: 825, prev: 820, high: 838, low: 821, mktcap: "21.65兆", pe: 25.8, yield: 2.15, high52: 850, low52: 512, beta: 1.15, eps: 32.4 },
-  "0056.TW": { price: 39.80, change: 0.35, chgPct: 0.89, vol: "18.5k張", open: 39.5, prev: 39.45, high: 39.9, low: 39.45, mktcap: "2950億", pe: 16.5, yield: 6.85, high52: 41.2, low52: 32.1, beta: 0.82, eps: 2.4 },
-  "00878.TW": { price: 22.85, change: 0.12, chgPct: 0.53, vol: "42.1k張", open: 22.75, prev: 22.73, high: 22.9, low: 22.71, mktcap: "2840億", pe: 15.2, yield: 6.38, high52: 23.4, low52: 18.5, beta: 0.75, eps: 1.5 },
-  "00919.TW": { price: 25.62, change: 0.18, chgPct: 0.71, vol: "38.9k張", open: 25.45, prev: 25.44, high: 25.7, low: 25.4, mktcap: "1980億", pe: 14.8, yield: 9.85, high52: 27.2, low52: 20.8, beta: 0.80, eps: 1.7 },
-  "00929.TW": { price: 20.25, change: 0.08, chgPct: 0.40, vol: "51.2k張", open: 20.18, prev: 20.17, high: 20.3, low: 20.15, mktcap: "2120億", pe: 14.2, yield: 8.90, high52: 21.8, low52: 17.2, beta: 0.85, eps: 1.4 },
-  "0050.TW": { price: 165.40, change: 2.10, chgPct: 1.29, vol: "9.2k張", open: 163.5, prev: 163.3, high: 166.0, low: 163.2, mktcap: "3540億", pe: 22.4, yield: 3.62, high52: 172.0, low52: 118.0, beta: 1.00, eps: 7.38 },
-  "2317.TW": { price: 182.50, change: 3.50, chgPct: 1.96, vol: "28.5k張", open: 179.5, prev: 179.0, high: 183.5, low: 178.5, mktcap: "2.53兆", pe: 18.2, yield: 2.96, high52: 186.0, low52: 98.0, beta: 0.95, eps: 10.05 },
-  "2454.TW": { price: 1165.00, change: 25.00, chgPct: 2.19, vol: "3.1k張", open: 1145, prev: 1140, high: 1175, low: 1135, mktcap: "1.86兆", pe: 24.5, yield: 5.12, high52: 1220, low52: 685, beta: 1.20, eps: 47.5 },
-  "2303.TW": { price: 52.80, change: 0.40, chgPct: 0.76, vol: "21.2k張", open: 52.4, prev: 52.4, high: 53.1, low: 52.3, mktcap: "6600億", pe: 11.2, yield: 5.68, high52: 56.4, low52: 44.5, beta: 0.90, eps: 4.7 },
-  "2308.TW": { price: 342.50, change: 4.50, chgPct: 1.33, vol: "4.5k張", open: 338, prev: 338, high: 345, low: 337, mktcap: "8900億", pe: 25.3, yield: 2.18, high52: 388, low52: 265, beta: 1.05, eps: 13.5 },
-  "2881.TW": { price: 73.80, change: 0.60, chgPct: 0.82, vol: "14.2k張", open: 73.2, prev: 73.2, high: 74.2, low: 73.0, mktcap: "9600億", pe: 12.8, yield: 4.07, high52: 76.5, low52: 58.2, beta: 0.78, eps: 5.76 },
-  "2882.TW": { price: 54.90, change: 0.30, chgPct: 0.55, vol: "16.8k張", open: 54.6, prev: 54.6, high: 55.2, low: 54.4, mktcap: "8700億", pe: 11.5, yield: 3.64, high52: 57.8, low52: 41.5, beta: 0.81, eps: 4.78 }
+  "^TWII": { price: 43644.00, change: 1376.00, chgPct: 3.25, vol: "5124億", name: "加權指數" },
+  "2330.TW": { price: 2325.00, change: 15.00, chgPct: 0.65, vol: "41.5k張", open: 2315, prev: 2310, high: 2335, low: 2310, mktcap: "60.28兆", pe: 27.5, yield: 2.15, high52: 2350, low52: 830, beta: 1.20, eps: 84.50 },
+  "0056.TW": { price: 46.35, change: 0.45, chgPct: 0.98, vol: "28.5k張", open: 45.9, prev: 45.9, high: 46.5, low: 45.85, mktcap: "3430億", pe: 16.5, yield: 6.85, high52: 48.2, low52: 35.1, beta: 0.82, eps: 3.2 },
+  "00878.TW": { price: 29.20, change: 0.35, chgPct: 1.21, vol: "52.1k張", open: 28.85, prev: 28.85, high: 29.35, low: 28.80, mktcap: "3280億", pe: 15.2, yield: 6.38, high52: 30.5, low52: 21.2, beta: 0.75, eps: 1.9 },
+  "00919.TW": { price: 27.49, change: 0.28, chgPct: 1.03, vol: "46.9k張", open: 27.20, prev: 27.21, high: 27.55, low: 27.15, mktcap: "2450億", pe: 14.8, yield: 9.85, high52: 28.5, low52: 22.1, beta: 0.80, eps: 2.2 },
+  "00929.TW": { price: 26.80, change: 0.18, chgPct: 0.68, vol: "62.2k張", open: 26.62, prev: 26.62, high: 26.90, low: 26.58, mktcap: "2680億", pe: 14.2, yield: 8.90, high52: 27.8, low52: 19.5, beta: 0.85, eps: 1.8 },
+  "0050.TW": { price: 320.50, change: 4.50, chgPct: 1.42, vol: "14.2k張", open: 316.0, prev: 316.0, high: 322.0, low: 315.5, mktcap: "4280億", pe: 22.4, yield: 3.62, high52: 335.0, low52: 158.0, beta: 1.00, eps: 14.50 },
+  "2317.TW": { price: 252.00, change: 5.50, chgPct: 2.23, vol: "38.5k張", open: 246.5, prev: 246.5, high: 254.0, low: 246.0, mktcap: "3.49兆", pe: 18.2, yield: 2.96, high52: 262.0, low52: 105.0, beta: 0.95, eps: 13.50 },
+  "2454.TW": { price: 2450.00, change: 45.00, chgPct: 1.87, vol: "5.1k張", open: 2405, prev: 2405, high: 2470, low: 2390, mktcap: "3.92兆", pe: 24.5, yield: 5.12, high52: 2550, low52: 1100, beta: 1.20, eps: 95.50 },
+  "2303.TW": { price: 82.50, change: 0.80, chgPct: 0.98, vol: "32.2k張", open: 81.7, prev: 81.7, high: 83.1, low: 81.5, mktcap: "1.03兆", pe: 11.2, yield: 5.68, high52: 88.5, low52: 48.2, beta: 0.90, eps: 6.80 },
+  "2308.TW": { price: 512.50, change: 8.50, chgPct: 1.69, vol: "6.5k張", open: 504, prev: 504, high: 516, low: 502, mktcap: "1.33兆", pe: 25.3, yield: 2.18, high52: 540, low52: 295, beta: 1.05, eps: 18.50 },
+  "2881.TW": { price: 112.00, change: 1.50, chgPct: 1.36, vol: "22.2k張", open: 110.5, prev: 110.5, high: 113.0, low: 110.0, mktcap: "1.45兆", pe: 12.8, yield: 4.07, high52: 118.0, low52: 65.5, beta: 0.78, eps: 8.50 },
+  "2882.TW": { price: 88.00, change: 0.90, chgPct: 1.03, vol: "25.8k張", open: 87.1, prev: 87.1, high: 88.6, low: 86.8, mktcap: "1.38兆", pe: 11.5, yield: 3.64, high52: 92.5, low52: 48.8, beta: 0.81, eps: 7.10 }
 };
 
 // ==========================================
@@ -360,11 +361,37 @@ function triggerBackgroundDividendUpdates() {
 // ==========================================
 // 6. 本地持久化資料存取 (LocalStorage)
 // ==========================================
+// ==========================================
+// 6. 本地持久化資料存取 (LocalStorage)
+// ==========================================
 function loadWatchlistFromStorage() {
   const stored = localStorage.getItem("livestock_watchlist");
   if (stored) {
     try {
       watchlist = JSON.parse(stored);
+      
+      // 自動升級資料格式：從舊的單筆購買升級為支援「多筆不同時間買進加總」的 transactions 結構
+      let migrated = false;
+      watchlist.forEach(item => {
+        if (!item.transactions) {
+          item.transactions = [
+            {
+              id: "tx_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
+              buyDate: item.buyDate || "2024-01-01",
+              buyPrice: item.buyPrice || 100,
+              shares: item.shares || 1000
+            }
+          ];
+          delete item.buyDate;
+          delete item.buyPrice;
+          delete item.shares;
+          migrated = true;
+        }
+      });
+      if (migrated) {
+        saveWatchlistToStorage();
+        console.log("已成功將舊的自選股格式遷移升級為 transactions 交易明細結構！");
+      }
     } catch (e) {
       console.error("無法載入自選股 LocalStorage:", e);
       watchlist = getMockDefaultWatchlist();
@@ -386,27 +413,42 @@ function getMockDefaultWatchlist() {
       symbol: "2330",
       name: "台積電",
       ysym: "2330.TW",
-      buyDate: "2024-03-15",
-      buyPrice: 620.00,
-      shares: 1000,
+      transactions: [
+        {
+          id: "tx_init_1",
+          buyDate: "2024-03-15",
+          buyPrice: 620.00,
+          shares: 1000
+        }
+      ],
       tags: ["半導體", "權值股"]
     },
     {
       symbol: "0056",
       name: "元大高股息",
       ysym: "0056.TW",
-      buyDate: "2023-08-10",
-      buyPrice: 33.50,
-      shares: 5000,
+      transactions: [
+        {
+          id: "tx_init_2",
+          buyDate: "2023-08-10",
+          buyPrice: 33.50,
+          shares: 5000
+        }
+      ],
       tags: ["ETF", "高股息"]
     },
     {
       symbol: "00878",
       name: "國泰永續高股息",
       ysym: "00878.TW",
-      buyDate: "2024-01-15",
-      buyPrice: 21.20,
-      shares: 10000,
+      transactions: [
+        {
+          id: "tx_init_3",
+          buyDate: "2024-01-15",
+          buyPrice: 21.20,
+          shares: 10000
+        }
+      ],
       tags: ["ETF", "高股息"]
     }
   ];
@@ -677,45 +719,86 @@ function calculateDividendsForStock(ysym, buyDateStr, shares) {
  * 計算持股投資組合與大盤之關聯績效
  */
 function getCalculatedHoldingsData() {
-  let totalCost = 0; // 投入原始成本
-  let totalMarketValue = 0; // 當前市值
-  let totalDividends = 0; // 累積配息
+  let totalCost = 0; // 投入原始總成本
+  let totalMarketValue = 0; // 當前總市值
+  let totalDividends = 0; // 累計配息總金額
   const holdingsList = [];
 
   watchlist.forEach(item => {
     const sym = item.ysym;
     const priceData = realMarketPrices[sym];
-    const currentPrice = priceData ? priceData.price : item.buyPrice;
-    
-    // 1. 計算該檔個股原始投入總成本
-    const cost = item.buyPrice * item.shares;
-    // 2. 當前市值
-    const mktVal = currentPrice * item.shares;
-    // 3. 該時段累積已收配息
-    const divInfo = calculateDividendsForStock(sym, item.buyDate, item.shares);
-    // 4. 折抵配息後實際成本 = 原始成本 - 累計配息
-    const netCost = cost - divInfo.totalDividends;
-    // 5. 帳面損益 (未加息) = 市值 - 原始成本
-    const capitalGain = mktVal - cost;
-    // 6. 即時總收益 (含息報酬) = 市值 - 實際淨成本 = 市值 - 原始成本 + 累積配息
-    const totalReturn = mktVal - netCost - cost; // 等同於 capitalGain + divInfo.totalDividends
-    const totalReturnPct = cost > 0 ? (totalReturn / cost * 100) : 0;
+    const currentPrice = priceData ? priceData.price : (item.transactions?.[0]?.buyPrice || 100);
 
-    totalCost += cost;
+    let stockTotalCost = 0;
+    let stockTotalShares = 0;
+    let stockTotalDividends = 0;
+    let stockAllDividendRecords = [];
+
+    // 防禦遷移
+    if (!item.transactions) {
+      item.transactions = [{
+        id: "tx_" + Date.now() + "_" + Math.random(),
+        buyDate: item.buyDate || "2024-01-01",
+        buyPrice: item.buyPrice || 100,
+        shares: item.shares || 1000
+      }];
+    }
+
+    // 分別為每一筆不同時間買入的交易獨立計算其累積配息，再做加總！
+    item.transactions.forEach(tx => {
+      const cost = tx.buyPrice * tx.shares;
+      stockTotalCost += cost;
+      stockTotalShares += tx.shares;
+
+      const divInfo = calculateDividendsForStock(sym, tx.buyDate, tx.shares);
+      stockTotalDividends += divInfo.totalDividends;
+
+      divInfo.records.forEach(rec => {
+        const existing = stockAllDividendRecords.find(r => r.date === rec.date);
+        if (existing) {
+          existing.total += rec.total;
+        } else {
+          stockAllDividendRecords.push({
+            date: rec.date,
+            amount: rec.amount,
+            total: rec.total,
+            isMock: rec.isMock
+          });
+        }
+      });
+    });
+
+    stockAllDividendRecords.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    // 當前市值 = 現價 × 總持股數
+    const mktVal = currentPrice * stockTotalShares;
+    // 折抵配息後實際成本 = 原始總成本 - 累計配息
+    const netCost = stockTotalCost - stockTotalDividends;
+    // 帳面損益 (不含息) = 目前市值 - 原始成本
+    const capitalGain = mktVal - stockTotalCost;
+    // 即時總收益 (含息總損益) = 目前市值 - 折抵配息後實際成本 = 市值 - 原始總成本 + 累計配息
+    // 修正 Bug：原先寫成 mktVal - netCost - cost 多扣了一次投入成本！正確為 mktVal - netCost
+    const totalReturn = mktVal - netCost;
+    const totalReturnPct = stockTotalCost > 0 ? (totalReturn / stockTotalCost * 100) : 0;
+    const averageBuyPrice = stockTotalShares > 0 ? (stockTotalCost / stockTotalShares) : 0;
+
+    totalCost += stockTotalCost;
     totalMarketValue += mktVal;
-    totalDividends += divInfo.totalDividends;
+    totalDividends += stockTotalDividends;
 
     holdingsList.push({
       ...item,
       currentPrice,
-      originalCost: cost,
+      totalShares: stockTotalShares,
+      averageBuyPrice,
+      originalCost: stockTotalCost,
       marketValue: mktVal,
-      accumulatedDividends: divInfo.totalDividends,
+      accumulatedDividends: stockTotalDividends,
       netCost,
       capitalGain,
       totalReturn,
       totalReturnPct,
-      dividendRecords: divInfo.records
+      dividendRecords: stockAllDividendRecords
     });
   });
 
@@ -923,7 +1006,8 @@ function showPortfolioOverview() {
 
 function updateStockDetailPanel(ysym) {
   const priceData = realMarketPrices[ysym];
-  const userStockInfo = watchlist.find(item => item.ysym === ysym);
+  const calcData = getCalculatedHoldingsData();
+  const userStockInfo = calcData.holdings.find(item => item.ysym === ysym);
   
   if (!priceData) return;
 
@@ -977,44 +1061,65 @@ function updateStockDetailPanel(ysym) {
     costCardEl.classList.remove("hidden");
     if (userTagBadge) userTagBadge.style.display = "inline-block";
 
-    // 計算配息損益核心指標
-    const cost = userStockInfo.buyPrice * userStockInfo.shares;
-    const mktValue = priceData.price * userStockInfo.shares;
-    const divInfo = calculateDividendsForStock(ysym, userStockInfo.buyDate, userStockInfo.shares);
-    const netCost = cost - divInfo.totalDividends;
-    const capitalGain = mktValue - cost;
-    const totalReturn = mktValue - netCost - cost;
-    const totalReturnPct = cost > 0 ? (totalReturn / cost * 100) : 0;
+    // 獲取最古早買入日期做展示
+    const rawItem = watchlist.find(item => item.ysym === ysym);
+    let earliestDate = "2024-01-01";
+    if (rawItem && rawItem.transactions && rawItem.transactions.length > 0) {
+      const dates = rawItem.transactions.map(t => new Date(t.buyDate));
+      const minDate = new Date(Math.min.apply(null, dates));
+      earliestDate = minDate.toISOString().split("T")[0];
+    }
 
-    // 寫入分析卡片 DOM
-    document.getElementById("ucc-buy-date").textContent = `買入日期: ${userStockInfo.buyDate}`;
-    document.getElementById("ucc-shares").textContent = `${formatMoney(userStockInfo.shares, 0)} 股`;
-    document.getElementById("ucc-buy-price").textContent = `$${formatMoney(userStockInfo.buyPrice)}`;
-    document.getElementById("ucc-total-cost").textContent = `$${formatMoney(cost, 0)}`;
-    document.getElementById("ucc-total-dividends").textContent = `$${formatMoney(divInfo.totalDividends, 0)}`;
-    document.getElementById("ucc-market-value").textContent = `$${formatMoney(mktValue, 0)}`;
-    document.getElementById("ucc-net-cost").textContent = `$${formatMoney(netCost, 0)}`;
+    // 寫入分析卡片綜合指標 DOM
+    document.getElementById("ucc-buy-date").textContent = `最早買入: ${earliestDate}`;
+    document.getElementById("ucc-shares").textContent = `${formatMoney(userStockInfo.totalShares, 0)} 股`;
+    document.getElementById("ucc-buy-price").textContent = `$${formatMoney(userStockInfo.averageBuyPrice)}`;
+    document.getElementById("ucc-total-cost").textContent = `$${formatMoney(userStockInfo.originalCost, 0)}`;
+    document.getElementById("ucc-total-dividends").textContent = `$${formatMoney(userStockInfo.accumulatedDividends, 0)}`;
+    document.getElementById("ucc-market-value").textContent = `$${formatMoney(userStockInfo.marketValue, 0)}`;
+    document.getElementById("ucc-net-cost").textContent = `$${formatMoney(userStockInfo.netCost, 0)}`;
     
     const cgEl = document.getElementById("ucc-capital-gain");
     if (cgEl) {
-      cgEl.textContent = `${capitalGain >= 0 ? "+" : ""}$${formatMoney(capitalGain, 0)}`;
-      cgEl.className = `ucc-val ${capitalGain >= 0 ? "up" : "down"}`;
+      cgEl.textContent = `${userStockInfo.capitalGain >= 0 ? "+" : ""}$${formatMoney(userStockInfo.capitalGain, 0)}`;
+      cgEl.className = `ucc-val ${userStockInfo.capitalGain >= 0 ? "up" : "down"}`;
     }
 
     const trEl = document.getElementById("ucc-total-return");
     if (trEl) {
-      trEl.textContent = `${totalReturn >= 0 ? "+" : ""}$${formatMoney(totalReturn, 0)} (${totalReturn >= 0 ? "+" : ""}${totalReturnPct.toFixed(2)}%)`;
-      trEl.className = `ucc-val ${totalReturn >= 0 ? "up" : "down"}`;
+      trEl.textContent = `${userStockInfo.totalReturn >= 0 ? "+" : ""}$${formatMoney(userStockInfo.totalReturn, 0)} (${userStockInfo.totalReturn >= 0 ? "+" : ""}${userStockInfo.totalReturnPct.toFixed(2)}%)`;
+      trEl.className = `ucc-val ${userStockInfo.totalReturn >= 0 ? "up" : "down"}`;
     }
 
-    // 填寫歷史除息明細
-    document.getElementById("ucc-div-count").textContent = `(${divInfo.records.length} 次除息)`;
+    // 3. 填入「買入交易紀錄」明細列表
+    const txCountEl = document.getElementById("ucc-tx-count");
+    if (txCountEl) txCountEl.textContent = `(共 ${rawItem.transactions.length} 筆買入)`;
+    
+    const txListEl = document.getElementById("ucc-tx-list");
+    if (txListEl) {
+      // 按購買時間由新到舊排列交易紀錄
+      const sortedTxs = [...rawItem.transactions].sort((a, b) => new Date(b.buyDate) - new Date(a.buyDate));
+      txListEl.innerHTML = sortedTxs.map(tx => {
+        const cost = tx.buyPrice * tx.shares;
+        return `
+          <div class="ucc-tx-row">
+            <span class="tx-date">${tx.buyDate}</span>
+            <span class="tx-info">$${formatMoney(tx.buyPrice)} × ${tx.shares}股</span>
+            <span class="tx-cost">成本: $${formatMoney(cost, 0)}</span>
+            <button class="btn-tx-del" onclick="removeTransaction(event, '${ysym}', '${tx.id}')">刪除</button>
+          </div>
+        `;
+      }).join("");
+    }
+
+    // 4. 填寫歷史綜合除息明細
+    document.getElementById("ucc-div-count").textContent = `(累計得 ${userStockInfo.dividendRecords.length} 次除息)`;
     const divListEl = document.getElementById("ucc-div-list");
     if (divListEl) {
-      if (divInfo.records.length === 0) {
-        divListEl.innerHTML = `<div class="empty-dividends">在此買入日期之後尚無配息除息紀錄</div>`;
+      if (userStockInfo.dividendRecords.length === 0) {
+        divListEl.innerHTML = `<div class="empty-dividends">在此等買入日期之後尚無任何配息除息紀錄</div>`;
       } else {
-        divListEl.innerHTML = divInfo.records.map(rec => `
+        divListEl.innerHTML = userStockInfo.dividendRecords.map(rec => `
           <div class="ucc-div-row">
             <span class="div-date">${rec.date} ${rec.isMock ? "(模擬)" : "(真實除息)"}</span>
             <span class="div-val">每股 $${rec.amount.toFixed(2)}</span>
@@ -1029,7 +1134,7 @@ function updateStockDetailPanel(ysym) {
     if (userTagBadge) userTagBadge.style.display = "none";
   }
 
-  // 3. 更新個股詳細十二項指標
+  // 5. 更新個股詳細十二項指標
   document.getElementById("ic-open").textContent = formatMoney(priceData.open);
   document.getElementById("ic-prev").textContent = formatMoney(priceData.prev);
   document.getElementById("ic-high").textContent = formatMoney(priceData.high);
@@ -1296,6 +1401,7 @@ function setupPurchaseCost(symbol) {
 }
 
 // 確認新增自選股
+// 確認新增自選股或交易明細紀錄
 function confirmAddStock() {
   if (!selectedStockForSetup) return;
 
@@ -1310,24 +1416,32 @@ function confirmAddStock() {
   }
 
   const sym = selectedStockForSetup.ysym;
-
-  // 建立持股物件
-  const newWatchItem = {
-    symbol: selectedStockForSetup.symbol,
-    name: selectedStockForSetup.name,
-    ysym: sym,
+  const txId = "tx_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
+  const newTx = {
+    id: txId,
     buyDate: dateVal,
     buyPrice: priceVal,
-    shares: sharesVal,
-    tags: selectedStockForSetup.tags || ["台股"]
+    shares: sharesVal
   };
 
-  // 檢查是否重複（雖然 Step 1 有做阻擋，此處做二次防禦）
+  // 檢查該股票是否已經在自選股清單中
   const idx = watchlist.findIndex(item => item.ysym === sym);
   if (idx >= 0) {
-    watchlist[idx] = newWatchItem; // 覆寫更新
+    // 已經在清單，將新交易推入 transactions 陣列，實現不同時間買進的加總功能！
+    if (!watchlist[idx].transactions) watchlist[idx].transactions = [];
+    watchlist[idx].transactions.push(newTx);
+    showToast(`已成功為 ${selectedStockForSetup.name} 新增一筆買入交易！`, "success");
   } else {
-    watchlist.push(newWatchItem); // 新增
+    // 全新股票，創立完整物件並存入首筆交易
+    const newWatchItem = {
+      symbol: selectedStockForSetup.symbol,
+      name: selectedStockForSetup.name,
+      ysym: sym,
+      transactions: [newTx],
+      tags: selectedStockForSetup.tags || ["台股"]
+    };
+    watchlist.push(newWatchItem);
+    showToast(`已成功將 ${selectedStockForSetup.name} 加入自選持股計算！`, "success");
   }
 
   // 儲存至 LocalStorage 並向快取寫入預設股價
@@ -1339,7 +1453,6 @@ function confirmAddStock() {
       : { price: priceVal, change: 0, chgPct: 0, name: selectedStockForSetup.name };
   }
 
-  showToast(`已成功將 ${selectedStockForSetup.name} 加入自選持股計算！`, "success");
   closeAddModal();
   
   // 立即在背景為該股抓取最新真實配息紀錄並重新運算
@@ -1355,6 +1468,45 @@ function confirmAddStock() {
   
   // 自動引導選定至剛剛新增的那一檔，展現極致流暢度
   setTimeout(() => selectStock(sym), 300);
+}
+
+// 個股詳情點擊「新增一筆買入交易」
+function addAnotherTransaction() {
+  if (!currentActiveSymbol) return;
+  const stock = watchlist.find(item => item.ysym === currentActiveSymbol);
+  if (stock) {
+    setupPurchaseCost(stock.symbol);
+    // 打開 Modal 設定成本步驟
+    document.getElementById("modal-bg").classList.add("show");
+  }
+}
+
+// 刪除特定一筆買入交易紀錄
+function removeTransaction(event, ysym, txId) {
+  if (event) event.stopPropagation();
+  
+  const stock = watchlist.find(item => item.ysym === ysym);
+  if (!stock) return;
+
+  if (confirm(`確定要刪除此筆交易明細嗎？`)) {
+    stock.transactions = stock.transactions.filter(tx => tx.id !== txId);
+    
+    // 如果所有交易紀錄都被刪光了，自動將該股票自選移除
+    if (stock.transactions.length === 0) {
+      watchlist = watchlist.filter(item => item.ysym !== ysym);
+      showToast(`已移除沒有持股明細的 ${stock.name}`, "success");
+      saveWatchlistToStorage();
+      showPortfolioOverview();
+      return;
+    }
+    
+    saveWatchlistToStorage();
+    showToast(`已成功刪除該筆交易紀錄`, "success");
+    
+    // 重新計算並刷新介面
+    updatePortfolioOverview();
+    updateStockDetailPanel(ysym);
+  }
 }
 
 function removeStock(event, ysym) {
