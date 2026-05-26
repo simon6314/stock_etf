@@ -150,6 +150,14 @@ let DIVIDEND_DATABASE = {
     { date: "2024-07-04", amount: 30.40 },
     { date: "2024-01-04", amount: 24.60 },
     { date: "2023-06-20", amount: 76.00 }
+  ],
+  "2392.TW": [
+    { date: "2025-07-18", amount: 2.50 },
+    { date: "2024-07-18", amount: 2.00 },
+    { date: "2023-07-26", amount: 2.20 },
+    { date: "2022-07-19", amount: 1.50 },
+    { date: "2021-07-20", amount: 2.50 },
+    { date: "2020-07-22", amount: 2.50 }
   ]
 };
 
@@ -165,6 +173,7 @@ const SEARCHABLE_STOCKS = [
   { symbol: "0050", name: "元大台灣50", fullname: "元大台灣50 (0050.TW)", ysym: "0050.TW", tags: ["ETF", "市值型"] },
   { symbol: "2317", name: "鴻海", fullname: "鴻海 (2317.TW)", ysym: "2317.TW", tags: ["電子代工", "權值股"] },
   { symbol: "2454", name: "聯發科", fullname: "聯發科 (2454.TW)", ysym: "2454.TW", tags: ["IC設計", "權值股"] },
+  { symbol: "2392", name: "正崴", fullname: "正崴 (2392.TW)", ysym: "2392.TW", tags: ["連接器", "消費電子", "蘋果概念股"] },
   { symbol: "2303", name: "聯電", fullname: "聯電 (2303.TW)", ysym: "2303.TW", tags: ["半導體"] },
   { symbol: "2308", name: "台達電", fullname: "台達電 (2308.TW)", ysym: "2308.TW", tags: ["電源供應"] },
   { symbol: "2881", name: "富邦金", fullname: "富邦金 (2881.TW)", ysym: "2881.TW", tags: ["金融龍頭"] },
@@ -183,6 +192,7 @@ const OFFLINE_PRICES_DATABASE = {
   "0050.TW": { price: 320.50, change: 4.50, chgPct: 1.42, vol: "14.2k張", open: 316.0, prev: 316.0, high: 322.0, low: 315.5, mktcap: "4280億", pe: 22.4, yield: 3.62, high52: 335.0, low52: 158.0, beta: 1.00, eps: 14.50 },
   "2317.TW": { price: 252.00, change: 5.50, chgPct: 2.23, vol: "38.5k張", open: 246.5, prev: 246.5, high: 254.0, low: 246.0, mktcap: "3.49兆", pe: 18.2, yield: 2.96, high52: 262.0, low52: 105.0, beta: 0.95, eps: 13.50 },
   "2454.TW": { price: 2450.00, change: 45.00, chgPct: 1.87, vol: "5.1k張", open: 2405, prev: 2405, high: 2470, low: 2390, mktcap: "3.92兆", pe: 24.5, yield: 5.12, high52: 2550, low52: 1100, beta: 1.20, eps: 95.50 },
+  "2392.TW": { price: 38.60, change: 0.55, chgPct: 1.45, vol: "8.5k張", open: 38.65, prev: 38.05, high: 39.00, low: 37.80, mktcap: "198億", pe: 11.2, yield: 6.48, high52: 45.2, low52: 31.5, beta: 0.92, eps: 3.45 },
   "2303.TW": { price: 82.50, change: 0.80, chgPct: 0.98, vol: "32.2k張", open: 81.7, prev: 81.7, high: 83.1, low: 81.5, mktcap: "1.03兆", pe: 11.2, yield: 5.68, high52: 88.5, low52: 48.2, beta: 0.90, eps: 6.80 },
   "2308.TW": { price: 512.50, change: 8.50, chgPct: 1.69, vol: "6.5k張", open: 504, prev: 504, high: 516, low: 502, mktcap: "1.33兆", pe: 25.3, yield: 2.18, high52: 540, low52: 295, beta: 1.05, eps: 18.50 },
   "2881.TW": { price: 112.00, change: 1.50, chgPct: 1.36, vol: "22.2k張", open: 110.5, prev: 110.5, high: 113.0, low: 110.0, mktcap: "1.45兆", pe: 12.8, yield: 4.07, high52: 118.0, low52: 65.5, beta: 0.78, eps: 8.50 },
@@ -938,6 +948,50 @@ function renderWatchlist() {
 // 投資組合總結畫面的實作
 function updatePortfolioOverview() {
   const calcData = getCalculatedHoldingsData();
+
+  // 同步更新 Sidebar 頂部的「自選總資產大卡片」
+  const summaryValEl = document.getElementById("summary-portfolio-value");
+  const summaryRowEl = document.getElementById("summary-portfolio-return-row");
+  const summaryArrowEl = document.getElementById("summary-portfolio-arrow");
+  const summaryRetValEl = document.getElementById("summary-portfolio-return-val");
+  const summaryRetPctEl = document.getElementById("summary-portfolio-return-pct");
+  const summaryCostEl = document.getElementById("summary-portfolio-cost");
+  const summaryDivsEl = document.getElementById("summary-portfolio-dividends");
+
+  if (summaryValEl) {
+    const prevValText = summaryValEl.textContent.replace(/[^0-9.-]/g, "");
+    const prevVal = parseFloat(prevValText) || 0;
+    
+    // 大字體金額顯示
+    summaryValEl.textContent = formatMoney(calcData.totalMarketValue, 0);
+
+    // 瞬時漲跌閃爍動畫（僅在有變動且不是初始值時觸發，對手機體驗極佳）
+    const cardEl = document.querySelector(".portfolio-summary-card");
+    if (cardEl && prevVal > 0 && Math.abs(calcData.totalMarketValue - prevVal) > 0.5) {
+      if (calcData.totalMarketValue > prevVal) {
+        cardEl.classList.add("flash-up");
+        setTimeout(() => cardEl.classList.remove("flash-up"), 600);
+      } else {
+        cardEl.classList.add("flash-down");
+        setTimeout(() => cardEl.classList.remove("flash-down"), 600);
+      }
+    }
+  }
+
+  if (summaryRowEl) {
+    const isUp = calcData.portfolioTotalReturn >= 0;
+    summaryRowEl.className = `tc-change ${isUp ? "up" : "down"}`;
+    if (summaryArrowEl) summaryArrowEl.textContent = isUp ? "▲" : "▼";
+    if (summaryRetValEl) summaryRetValEl.textContent = formatMoney(Math.abs(calcData.portfolioTotalReturn), 0);
+    if (summaryRetPctEl) summaryRetPctEl.textContent = `(${isUp ? "+" : ""}${calcData.portfolioReturnPct.toFixed(2)}%)`;
+  }
+
+  if (summaryCostEl) {
+    summaryCostEl.textContent = `總成本: $${formatMoney(calcData.totalCost, 0)}`;
+  }
+  if (summaryDivsEl) {
+    summaryDivsEl.textContent = `已領息: $${formatMoney(calcData.totalDividends, 0)}`;
+  }
 
   // 1. 更新 Hero Dashboard 總市值與總回報
   const valueEl = document.getElementById("p-total-value");
