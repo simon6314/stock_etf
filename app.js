@@ -213,6 +213,12 @@ let isOfflineMode = false; // 是否因跨域阻擋或網路問題啟動本地�
 let selectedStockForSetup = null; // Modal 步驟二暫存選中要設定成本的股票
 let hasFetchedClosedData = false; // 盤後是否已成功拉取過一次最新的真實收盤行情
 
+// =============================================================
+// 替換為您在 Cloudflare Workers 部署完成後得到的專屬網址！
+// 例如: "https://stock-proxy.your-username.workers.dev"
+// =============================================================
+const MY_PROXY_WORKER_URL = "https://restless-block-e8ad.simon6314.workers.dev/";
+
 // ==========================================
 // 4. 初始化應用程式
 // ==========================================
@@ -238,9 +244,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       : { price: item.buyPrice, change: 0, chgPct: 0, name: item.name };
   });
 
-  // 立即讀取一次網路行情，並啟動定時獲取行情（每 30 秒向雅虎財經拉取真實股價）
+  // 立即讀取一次網路行情，並啟動定時獲取行情（每 5 秒透過專屬的富果 Cloudflare 代理極速拉取零延遲股價！）
   fetchRealNetworkQuotes();
-  setInterval(fetchRealNetworkQuotes, 30000);
+  setInterval(fetchRealNetworkQuotes, 5000);
   
   // 啟動 3 秒一次的「盤中毫秒級微幅跳動引擎」，提供即時盤中波動的精緻視覺
   setInterval(tickMarketPrices, 3000);
@@ -497,7 +503,6 @@ async function fetchRealNetworkQuotes() {
     return;
   }
 
-  // 將需要獲取的代號整合（大盤加上自選股）
   const symbolsToFetch = ["^TWII"];
   watchlist.forEach(item => {
     if (!symbolsToFetch.includes(item.ysym)) {
@@ -509,115 +514,48 @@ async function fetchRealNetworkQuotes() {
 
   let successCount = 0;
 
-  // 使用 Promise.allSettled 並行抓取所有標的之即時價格，大幅提昇 Android 前端效能與體驗
+  // 使用專屬代理平行極速抓取富果即時 API，實現秒級零延遲同步
   const fetchPromises = symbolsToFetch.map(async (sym) => {
-    const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=1d`;
+    const fetchUrl = `${MY_PROXY_WORKER_URL}/?symbol=${encodeURIComponent(sym)}`;
     
-    // 多重 CORS 代理備份策略，確保 100% 成功率
-    const proxies = [
-      `https://corsproxy.io/?url=${encodeURIComponent(targetUrl)}`,
-      `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
-      `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`
-    ];
-
-    let data = null;
-    let successProxy = "";
-
-    for (const proxyUrl of proxies) {
-      try {
-        const response = await fetch(proxyUrl);
-        if (response.ok) {
-          data = await response.json();
-          if (data?.chart?.result?.[0]) {
-            successProxy = proxyUrl;
-            break; // 成功拿到資料
-          }
+    try {
+      const response = await fetch(fetchUrl);
+      if (response.ok) {
+        const alignedData = await response.json();
+        if (alignedData && alignedData.price !== undefined) {
+          // 合併本地 OFFLINE_PRICES_DATABASE 的未變動長期指標（如本益比、殖利率）做防禦
+          const offline = OFFLINE_PRICES_DATABASE[sym] || {};
+          realMarketPrices[sym] = {
+            ...offline,
+            ...alignedData
+          };
+          successCount++;
         }
-      } catch (e) {
-        // 靜默嘗試下一個代理
       }
+    } catch (e) {
+      console.warn(`[富果即時] 無法透過 Worker 獲取 ${sym} 即時價格，將優雅降級使用快取/備份`, e.message);
     }
 
-    if (data && data?.chart?.result?.[0]) {
-      const chartResult = data.chart.result[0];
-      const meta = chartResult.meta;
-      
-      // 盤後防禦：多重管道獲取最新價格，防止 Yahoo 在收盤或休市後 regularMarketPrice 傳回空值
-      let price = meta.regularMarketPrice;
-      if (price === null || price === undefined || isNaN(price)) {
-        // Fallback 1: 嘗試從近期的 close 行情中取得最後一個非空收盤價
-        const closes = chartResult.indicators?.quote?.[0]?.close || [];
-        const validCloses = closes.filter(c => c !== null && c !== undefined && !isNaN(c));
-        if (validCloses.length > 0) {
-          price = validCloses[validCloses.length - 1];
-        }
-      }
-      if (price === null || price === undefined || isNaN(price)) {
-        // Fallback 2: 嘗試使用昨收價
-        price = meta.chartPreviousClose || meta.previousClose;
-      }
-      if (price === null || price === undefined || isNaN(price)) {
-        // Fallback 3: 使用本地備份價格
-        price = OFFLINE_PRICES_DATABASE[sym]?.price || 100.0;
-      }
-
-      const prev = meta.chartPreviousClose || meta.previousClose || price;
-      const change = parseFloat((price - prev).toFixed(2));
-      const chgPct = prev > 0 ? parseFloat((change / prev * 100).toFixed(2)) : 0;
-      
-      // 將 Yahoo API 返回的格式對齊我們系統所需的資料欄位
-      realMarketPrices[sym] = {
-        price: price,
-        change: change,
-        chgPct: chgPct,
-        vol: formatLargeVolume(meta.regularMarketVolume || 0),
-        name: OFFLINE_PRICES_DATABASE[sym]?.name || meta.symbol?.split(".")[0] || sym,
-        open: meta.regularMarketOpen || price,
-        prev: prev,
-        high: meta.regularMarketDayHigh || price,
-        low: meta.regularMarketDayLow || price,
-        mktcap: OFFLINE_PRICES_DATABASE[sym]?.mktcap || "--",
-        pe: OFFLINE_PRICES_DATABASE[sym]?.pe || "--",
-        yield: OFFLINE_PRICES_DATABASE[sym]?.yield || 0,
-        high52: OFFLINE_PRICES_DATABASE[sym]?.high52 || "--",
-        low52: OFFLINE_PRICES_DATABASE[sym]?.low52 || "--",
-        beta: OFFLINE_PRICES_DATABASE[sym]?.beta || "--",
-        eps: OFFLINE_PRICES_DATABASE[sym]?.eps || "--"
-      };
-      successCount++;
-    } else {
-      // 若該標的代理抓取皆失敗，僅在無任何歷史真實快取或為預設值時，才降級使用備份庫價格，避免抹除最新真實收盤價！
-      if (!realMarketPrices[sym] || realMarketPrices[sym].price === OFFLINE_PRICES_DATABASE[sym]?.price) {
-        if (OFFLINE_PRICES_DATABASE[sym]) {
-          realMarketPrices[sym] = { ...OFFLINE_PRICES_DATABASE[sym] };
-        }
-      }
+    // 如果該標的抓取失敗且快取中完全無資料，優雅降級使用本地基準底價數據作為安全防禦
+    if (!realMarketPrices[sym] && OFFLINE_PRICES_DATABASE[sym]) {
+      realMarketPrices[sym] = { ...OFFLINE_PRICES_DATABASE[sym] };
     }
   });
 
   try {
     await Promise.allSettled(fetchPromises);
-    
     if (successCount > 0) {
       isOfflineMode = false;
     } else {
-      throw new Error("所有自選股之 CORS 代理皆讀取失敗");
+      isOfflineMode = true;
     }
   } catch (err) {
-    console.warn("無法取得真實網路股市行情（改啟用高相容本地備份行情與波動引擎）:", err.message);
     isOfflineMode = true;
-    
-    // 如果全部失敗，確保快取中有最新本地備份數據
-    symbolsToFetch.forEach(sym => {
-      if (!realMarketPrices[sym] && OFFLINE_PRICES_DATABASE[sym]) {
-        realMarketPrices[sym] = { ...OFFLINE_PRICES_DATABASE[sym] };
-      }
-    });
   }
 
   // 行情更新完畢後，智能感應交易時間並重新渲染大盤指示燈、列表與總覽績效
   updateMarketStatusUi();
-  updateDomTickers(); // 網路行情拉取完畢後，立刻精準更新大盤與詳情卡片 DOM！
+  updateDomTickers();
   renderWatchlist();
   updatePortfolioOverview();
   
