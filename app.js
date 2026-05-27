@@ -244,9 +244,33 @@ document.addEventListener("DOMContentLoaded", async () => {
       : { price: item.buyPrice, change: 0, chgPct: 0, name: item.name };
   });
 
-  // 立即讀取一次網路行情，並啟動定時獲取行情（每 5 秒透過專屬的富果 Cloudflare 代理極速拉取零延遲股價！）
+  // 智慧休眠與輪詢控制器：偵測使用者是否正在看網頁，以省電、省流量、保障富果額度！
+  let updateIntervalId = null;
+  function startPolling() {
+    if (!updateIntervalId) {
+      updateIntervalId = setInterval(fetchRealNetworkQuotes, 10000); // 每 10 秒順暢且安全地拉取即時行情
+    }
+  }
+  function stopPolling() {
+    if (updateIntervalId) {
+      clearInterval(updateIntervalId);
+      updateIntervalId = null;
+    }
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+      console.log("[智慧休眠] 偵測到網頁已隱藏，暫停 API 請求以省電、省額度。");
+      stopPolling();
+    } else {
+      console.log("[智慧休眠] 偵測到網頁已開啟，立即刷新並恢復 10 秒行情更新。");
+      fetchRealNetworkQuotes();
+      startPolling();
+    }
+  });
+
+  // 首次載入立即抓取並啟動智慧輪詢
   fetchRealNetworkQuotes();
-  setInterval(fetchRealNetworkQuotes, 5000);
+  startPolling();
   
   // 啟動 3 秒一次的「盤中毫秒級微幅跳動引擎」，提供即時盤中波動的精緻視覺
   setInterval(tickMarketPrices, 3000);
@@ -1372,8 +1396,8 @@ async function renderHistoricalChart(ysym, range) {
   }
 
   const isUp = prices[prices.length - 1] >= prices[0];
-  const lineColor = isUp ? "#10d98a" : "#f04f5e";
-  const glowColor = isUp ? "rgba(16, 217, 138, 0.25)" : "rgba(240, 79, 94, 0.25)";
+  const lineColor = isUp ? "#f04f5e" : "#10d98a";
+  const glowColor = isUp ? "rgba(240, 79, 94, 0.25)" : "rgba(16, 217, 138, 0.25)";
 
   const chartGradient = ctx.getContext("2d").createLinearGradient(0, 0, 0, 260);
   chartGradient.addColorStop(0, glowColor);

@@ -13,12 +13,12 @@
   --text-muted: #4a5568;
   --accent:     #3b82f6;
   --accent-glow:rgba(59,130,246,0.25);
-  --up:         #10d98a;
-  --up-dim:     rgba(16,217,138,0.12);
-  --up-glow:    rgba(16,217,138,0.3);
-  --down:       #f04f5e;
-  --down-dim:   rgba(240,79,94,0.12);
-  --down-glow:  rgba(240,79,94,0.3);
+  --up:         #f04f5e;
+  --up-dim:     rgba(240,79,94,0.12);
+  --up-glow:    rgba(240,79,94,0.3);
+  --down:       #10d98a;
+  --down-dim:   rgba(16,217,138,0.12);
+  --down-glow:  rgba(16,217,138,0.3);
   --gold:       #f5c518;
   --sidebar-w:  320px;
   --header-h:   60px;
