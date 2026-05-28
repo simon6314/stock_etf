@@ -1485,7 +1485,6 @@ async function renderHistoricalChart(ysym, range) {
   document.getElementById("ms-low").textContent = formatMoney(minPrice);
   document.getElementById("ms-vol").textContent = volStr;
 }
-}
 
 // ==========================================
 // 13. 自選股 Modal 搜尋、兩階段新增與補登
