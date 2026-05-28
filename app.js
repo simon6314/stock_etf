@@ -282,6 +282,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   renderWatchlist();
   updatePortfolioOverview();
   updateDomTickers(); // 網頁載入瞬間即填入初始/昨收數據，拒絕 `--` 留白！
+  renderPortfolioChart(currentPortfolioRange);
   
   // 偵測視窗大小，適配手機版頁面
   window.addEventListener("resize", handleWindowResize);
@@ -585,6 +586,9 @@ async function fetchRealNetworkQuotes() {
   
   if (currentActiveSymbol) {
     updateStockDetailPanel(currentActiveSymbol);
+  } else {
+    // 當用戶處於投資組合總覽時，即時更新總資產變化折線圖的最後一個點！
+    renderPortfolioChart(currentPortfolioRange);
   }
 
   // 如果是在收盤時間，且此次成功獲取了網路數據，則標記為已成功拉取，後續智慧凍結
@@ -1183,6 +1187,9 @@ function showPortfolioOverview() {
   if (window.innerWidth <= 768) {
     switchMobileTab("detail");
   }
+
+  // 當返回總覽時，重新渲染總資產趨勢折線圖
+  renderPortfolioChart(currentPortfolioRange);
 }
 
 function updateStockDetailPanel(ysym) {
@@ -1336,7 +1343,116 @@ function updateStockDetailPanel(ysym) {
 // ==========================================
 // 12. 互動式 Chart.js 走勢圖繪製
 // ==========================================
+// ==========================================
+// 12. 互動式 Chart.js 走勢圖與資產變化圖繪製
+// ==========================================
 let chartAbortController = null;
+let portfolioChartAbortController = null;
+let currentPortfolioChart = null;
+
+// 共用 K 線與模擬走勢資料拉取/生成核心函數
+async function getStockCandlesData(ysym, range, signal) {
+  // 1. 優先嘗試向專屬代理拉取真正的富果歷史/即時 K 線走勢
+  try {
+    const fetchUrl = `${MY_PROXY_WORKER_URL}/?symbol=${encodeURIComponent(ysym)}&type=candles&range=${range}`;
+    const response = await fetch(fetchUrl, { signal });
+    if (response.ok) {
+      const alignedData = await response.json();
+      if (alignedData && alignedData.prices && alignedData.prices.length > 0) {
+        return {
+          labels: alignedData.labels,
+          prices: alignedData.prices,
+          high: alignedData.high,
+          low: alignedData.low,
+          vol: alignedData.vol,
+          success: true
+        };
+      }
+    }
+  } catch (err) {
+    if (err.name === "AbortError") throw err; // 拋出取消異常，供上層捕獲
+    console.warn(`[K線拉取] 無法載入 ${ysym} 真實 K 線，將降級使用確定性模擬`, err.message);
+  }
+
+  // 2. 降級防禦：使用「確定性」模擬走勢演算法 (Seed-based PRNG)
+  const currentPrice = realMarketPrices[ysym]?.price || OFFLINE_PRICES_DATABASE[ysym]?.price || 100.0;
+  const is1D = range === "1D";
+  const twseTimes = ["09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "12:00", "12:30", "13:00", "13:30"];
+  
+  // 獲取當前台北時間，確保在交易時間內只畫「已發生的點」
+  const now = new Date();
+  const twTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Taipei" }));
+  const isWeekday = twTime.getDay() >= 1 && twTime.getDay() <= 5;
+  const currentTotalMin = twTime.getHours() * 60 + twTime.getMinutes();
+  
+  // 生成決定性的隨機數種子，基於「個股代號 + 範圍 + 今日日期」
+  const todayStr = twTime.toISOString().split("T")[0];
+  let seed = 0;
+  const seedStr = ysym + range + todayStr;
+  for (let charIdx = 0; charIdx < seedStr.length; charIdx++) {
+    seed += seedStr.charCodeAt(charIdx);
+  }
+  
+  function getNextRandom() {
+    const x = Math.sin(seed++) * 10000;
+    return x - Math.floor(x);
+  }
+
+  let filteredTimes = [];
+  if (is1D) {
+    twseTimes.forEach(timeStr => {
+      const [h, m] = timeStr.split(":").map(Number);
+      const pointMin = h * 60 + m;
+      if (isWeekday && currentTotalMin >= 9 * 60 && currentTotalMin < 13 * 60 + 30) {
+        if (pointMin > currentTotalMin) return;
+      }
+      filteredTimes.push(timeStr);
+    });
+    if (filteredTimes.length === 0) {
+      filteredTimes.push("09:00");
+    }
+  }
+
+  const points = is1D ? filteredTimes.length : (range === "1W" ? 7 : (range === "1M" ? 30 : (range === "3M" ? 90 : 12)));
+  let basePrice = currentPrice * (0.95 + getNextRandom() * 0.08);
+  
+  const prices = [];
+  const labels = [];
+
+  for (let i = 0; i < points; i++) {
+    const change = (getNextRandom() - 0.48) * 0.015 * basePrice;
+    basePrice += change;
+    
+    if (i === points - 1) {
+      prices.push(currentPrice);
+    } else {
+      prices.push(parseFloat(basePrice.toFixed(2)));
+    }
+
+    if (is1D) {
+      labels.push(filteredTimes[i]);
+    } else if (range === "1W") {
+      labels.push(`Day ${i + 1}`);
+    } else if (range === "1M" || range === "3M") {
+      labels.push(`5/${i + 1}`);
+    } else {
+      labels.push(`Month ${i + 1}`);
+    }
+  }
+
+  const maxPrice = Math.max(...prices);
+  const minPrice = Math.min(...prices);
+  const volStr = realMarketPrices[ysym]?.vol || "--";
+
+  return {
+    labels: labels,
+    prices: prices,
+    high: maxPrice,
+    low: minPrice,
+    vol: volStr,
+    success: false
+  };
+}
 
 function setRange(range, element) {
   currentChartRange = range;
@@ -1365,177 +1481,283 @@ async function renderHistoricalChart(ysym, range) {
     currentChart.destroy();
   }
 
-  let labels = [];
-  let prices = [];
-  let maxPrice = 0;
-  let minPrice = 0;
-  let volStr = "--";
-  let fetchSuccess = false;
-
-  // 2. 優先嘗試向專屬代理拉取真正的富果歷史/即時 K 線走勢
   try {
-    const fetchUrl = `${MY_PROXY_WORKER_URL}/?symbol=${encodeURIComponent(ysym)}&type=candles&range=${range}`;
-    const response = await fetch(fetchUrl, { signal });
-    if (response.ok) {
-      const alignedData = await response.json();
-      if (alignedData && alignedData.prices && alignedData.prices.length > 0) {
-        labels = alignedData.labels;
-        prices = alignedData.prices;
-        maxPrice = alignedData.high;
-        minPrice = alignedData.low;
-        volStr = alignedData.vol;
-        fetchSuccess = true;
+    const candlesData = await getStockCandlesData(ysym, range, signal);
+    
+    // 3. 開始繪製 Chart.js
+    const isUp = candlesData.prices[candlesData.prices.length - 1] >= candlesData.prices[0];
+    const lineColor = isUp ? "#f04f5e" : "#10d98a";
+    const glowColor = isUp ? "rgba(240, 79, 94, 0.25)" : "rgba(16, 217, 138, 0.25)";
+
+    const chartGradient = ctx.getContext("2d").createLinearGradient(0, 0, 0, 260);
+    chartGradient.addColorStop(0, glowColor);
+    chartGradient.addColorStop(1, "rgba(8, 12, 20, 0.00)");
+
+    currentChart = new Chart(ctx, {
+      type: "line",
+      data: {
+        labels: candlesData.labels,
+        datasets: [{
+          label: ysym,
+          data: candlesData.prices,
+          borderColor: lineColor,
+          borderWidth: 2.5,
+          backgroundColor: chartGradient,
+          fill: true,
+          tension: range === "1D" ? 0.15 : 0.35, // 1D 分時圖張力略低以呈現精準波動，歷史圖張力高呈現流暢曲線
+          pointRadius: range === "1W" || range === "1D" ? 1.5 : 0,
+          pointHoverRadius: 5,
+          pointBackgroundColor: lineColor,
+          pointHoverBackgroundColor: "#ffffff"
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: "#111926",
+            titleColor: "#7a8aa0",
+            bodyColor: "#e8edf5",
+            bodyFont: { family: "'JetBrains Mono', monospace", size: 12 },
+            borderColor: "rgba(255,255,255,0.08)",
+            borderWidth: 1,
+            padding: 10,
+            displayColors: false,
+            callbacks: {
+              label: function(context) {
+                return ` 價格: $${formatMoney(context.raw)}`;
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            grid: { color: "rgba(255,255,255,0.02)", borderColor: "rgba(255,255,255,0.05)" },
+            ticks: { 
+              color: "#7a8aa0", 
+              font: { size: 10 },
+              maxTicksLimit: range === "1D" ? 8 : 12 // 限制手機 X 軸標籤最大數量，避免過密重疊
+            }
+          },
+          y: {
+            grid: { color: "rgba(255,255,255,0.02)", borderColor: "rgba(255,255,255,0.05)" },
+            ticks: { color: "#7a8aa0", font: { family: "'JetBrains Mono', monospace", size: 10 } }
+          }
+        }
       }
-    }
+    });
+
+    // 更新最高、最低指標
+    document.getElementById("ms-high").textContent = formatMoney(candlesData.high);
+    document.getElementById("ms-low").textContent = formatMoney(candlesData.low);
+    document.getElementById("ms-vol").textContent = candlesData.vol;
+
   } catch (err) {
     if (err.name === "AbortError") {
       console.log("[真實線圖] 請求已被取消 (AbortError)，避開重複渲染。");
       return; // 這是正常的 abort，直接返回，避免覆蓋後續的繪圖
     }
-    console.warn("[真實線圖] 無法載入真實 K 線行情，將優雅降級使用高逼真隨機模擬走勢", err.message);
+    console.error("[真實線圖] 繪製失敗:", err);
+  }
+}
+
+// 繪製自選總資產趨勢折線圖 (Portfolio Asset Trend Chart)
+function setPortfolioRange(range, element) {
+  currentPortfolioRange = range;
+  
+  // 移除其它 Tab active
+  const parent = document.getElementById("portfolio-time-tabs");
+  if (parent) {
+    parent.querySelectorAll(".ttab").forEach(btn => btn.classList.remove("active"));
+  }
+  if (element) {
+    element.classList.add("active");
+  }
+  
+  renderPortfolioChart(range);
+}
+
+async function renderPortfolioChart(range) {
+  const ctx = document.getElementById("portfolio-chart");
+  if (!ctx) return;
+
+  if (portfolioChartAbortController) {
+    portfolioChartAbortController.abort();
+  }
+  portfolioChartAbortController = new AbortController();
+  const { signal } = portfolioChartAbortController;
+
+  if (currentPortfolioChart) {
+    currentPortfolioChart.destroy();
   }
 
-  // 3. 降級防禦：若 Worker 尚未升級或拉取失敗，降級使用「確定性」模擬走勢演算法 (Seed-based PRNG)
-  if (!fetchSuccess) {
-    const currentPrice = realMarketPrices[ysym]?.price || 100.0;
-    const is1D = range === "1D";
-    const twseTimes = ["09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "12:00", "12:30", "13:00", "13:30"];
-    
-    // 獲取當前台北時間，確保在交易時間內只畫「已發生的點」
-    const now = new Date();
-    const twTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Taipei" }));
-    const isWeekday = twTime.getDay() >= 1 && twTime.getDay() <= 5;
-    const currentTotalMin = twTime.getHours() * 60 + twTime.getMinutes();
-    
-    // 生成決定性的隨機數種子，基於「個股代號 + 範圍 + 今日日期」
-    const todayStr = twTime.toISOString().split("T")[0];
-    let seed = 0;
-    const seedStr = ysym + range + todayStr;
-    for (let charIdx = 0; charIdx < seedStr.length; charIdx++) {
-      seed += seedStr.charCodeAt(charIdx);
-    }
-    
-    function getNextRandom() {
-      // 經典線性同餘或正弦 PRNG，確保種子相同時，回傳的亂數序列 100% 相同！
-      const x = Math.sin(seed++) * 10000;
-      return x - Math.floor(x);
-    }
+  // 1. 獲取當前持股清單與股數
+  const calcData = getCalculatedHoldingsData();
+  const holdings = calcData.holdings.filter(h => h.totalShares > 0);
 
-    let filteredTimes = [];
-    if (is1D) {
-      twseTimes.forEach(timeStr => {
-        const [h, m] = timeStr.split(":").map(Number);
-        const pointMin = h * 60 + m;
-        // 如果是交易日，且時間點在未來，且當前時間介於開收盤之間，則過濾掉未來點，呈現「隨時間繪製」的真實感
-        if (isWeekday && currentTotalMin >= 9 * 60 && currentTotalMin < 13 * 60 + 30) {
-          if (pointMin > currentTotalMin) {
-            return; // 未發生的未來點不繪製
-          }
+  if (holdings.length === 0) {
+    // 若無持股，畫一個空的提示
+    drawEmptyPortfolioChart(ctx, "請先設定持股成本與股數以繪製資產趨勢圖！");
+    return;
+  }
+
+  try {
+    // 2. 並行獲取所有持股的 K 線數據 (Capped parallel fetching)
+    const candlePromises = holdings.map(h => getStockCandlesData(h.ysym, range, signal));
+    const allCandles = await Promise.all(candlePromises);
+
+    // 3. 對齊數據並計算投資組合總值系列
+    // 使用點數最多的 K 線作為 Master labels 軸
+    let masterIndex = 0;
+    let maxPoints = 0;
+    allCandles.forEach((c, idx) => {
+      if (c.labels.length > maxPoints) {
+        maxPoints = c.labels.length;
+        masterIndex = idx;
+      }
+    });
+
+    const masterLabels = allCandles[masterIndex].labels;
+    const portfolioPrices = new Array(masterLabels.length).fill(0);
+
+    // 累加每個標的在每個時間點的市值 (當前總持股數 × 該點收盤價)
+    masterLabels.forEach((label, i) => {
+      holdings.forEach((h, stockIdx) => {
+        const candles = allCandles[stockIdx];
+        let pricePoint = 0;
+        if (candles.prices[i] !== undefined) {
+          pricePoint = candles.prices[i];
+        } else if (candles.prices.length > 0) {
+          pricePoint = candles.prices[candles.prices.length - 1];
+        } else {
+          pricePoint = h.currentPrice;
         }
-        filteredTimes.push(timeStr);
+        
+        portfolioPrices[i] += h.totalShares * pricePoint;
       });
-      if (filteredTimes.length === 0) {
-        filteredTimes.push("09:00");
-      }
+    });
+
+    // 4. 計算資產最高、最低與淨損益
+    const maxVal = Math.max(...portfolioPrices);
+    const minVal = Math.min(...portfolioPrices);
+    const initialVal = portfolioPrices[0] || 0;
+    const finalVal = portfolioPrices[portfolioPrices.length - 1] || 0;
+    const netReturn = finalVal - initialVal;
+    
+    // 更新資產統計小標籤
+    document.getElementById("p-ms-high").textContent = formatMoney(maxVal, 0);
+    document.getElementById("p-ms-low").textContent = formatMoney(minVal, 0);
+    
+    const retEl = document.getElementById("p-ms-return");
+    if (retEl) {
+      const isUp = netReturn >= 0;
+      retEl.textContent = `${isUp ? "+" : ""}${formatMoney(netReturn, 0)}`;
+      retEl.className = `ms-val ${isUp ? "up" : "down"}`;
     }
 
-    const points = is1D ? filteredTimes.length : (range === "1W" ? 7 : (range === "1M" ? 30 : (range === "3M" ? 90 : 12)));
-    let basePrice = currentPrice * (0.95 + getNextRandom() * 0.08); // 浮動基底
+    // 5. 繪製 Chart.js 線圖
+    const isUp = finalVal >= initialVal;
+    const lineColor = isUp ? "#f04f5e" : "#10d98a";
+    const glowColor = isUp ? "rgba(240, 79, 94, 0.25)" : "rgba(16, 217, 138, 0.25)";
 
-    for (let i = 0; i < points; i++) {
-      const change = (getNextRandom() - 0.48) * 0.015 * basePrice;
-      basePrice += change;
-      
-      if (i === points - 1) {
-        prices.push(currentPrice);
-      } else {
-        prices.push(parseFloat(basePrice.toFixed(2)));
-      }
+    const chartGradient = ctx.getContext("2d").createLinearGradient(0, 0, 0, 260);
+    chartGradient.addColorStop(0, glowColor);
+    chartGradient.addColorStop(1, "rgba(8, 12, 20, 0.00)");
 
-      if (is1D) {
-        labels.push(filteredTimes[i]);
-      } else if (range === "1W") {
-        labels.push(`Day ${i + 1}`);
-      } else if (range === "1M" || range === "3M") {
-        labels.push(`5/${i + 1}`);
-      } else {
-        labels.push(`Month ${i + 1}`);
-      }
-    }
-    maxPrice = Math.max(...prices);
-    minPrice = Math.min(...prices);
-    volStr = realMarketPrices[ysym]?.vol || "--";
-  }
-
-  // 4. 開始繪製 Chart.js
-  const isUp = prices[prices.length - 1] >= prices[0];
-  const lineColor = isUp ? "#f04f5e" : "#10d98a";
-  const glowColor = isUp ? "rgba(240, 79, 94, 0.25)" : "rgba(16, 217, 138, 0.25)";
-
-  const chartGradient = ctx.getContext("2d").createLinearGradient(0, 0, 0, 260);
-  chartGradient.addColorStop(0, glowColor);
-  chartGradient.addColorStop(1, "rgba(8, 12, 20, 0.00)");
-
-  currentChart = new Chart(ctx, {
-    type: "line",
-    data: {
-      labels: labels,
-      datasets: [{
-        label: ysym,
-        data: prices,
-        borderColor: lineColor,
-        borderWidth: 2.5,
-        backgroundColor: chartGradient,
-        fill: true,
-        tension: range === "1D" ? 0.15 : 0.35, // 1D 分時圖張力略低以呈現精準波動，歷史圖張力高呈現流暢曲線
-        pointRadius: range === "1W" || range === "1D" ? 1.5 : 0,
-        pointHoverRadius: 5,
-        pointBackgroundColor: lineColor,
-        pointHoverBackgroundColor: "#ffffff"
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          backgroundColor: "#111926",
-          titleColor: "#7a8aa0",
-          bodyColor: "#e8edf5",
-          bodyFont: { family: "'JetBrains Mono', monospace", size: 12 },
-          borderColor: "rgba(255,255,255,0.08)",
-          borderWidth: 1,
-          padding: 10,
-          displayColors: false,
-          callbacks: {
-            label: function(context) {
-              return ` 價格: $${formatMoney(context.raw)}`;
+    currentPortfolioChart = new Chart(ctx, {
+      type: "line",
+      data: {
+        labels: masterLabels,
+        datasets: [{
+          label: "總資產市值",
+          data: portfolioPrices,
+          borderColor: lineColor,
+          borderWidth: 3,
+          backgroundColor: chartGradient,
+          fill: true,
+          tension: range === "1D" ? 0.15 : 0.35,
+          pointRadius: range === "1W" || range === "1D" ? 1.5 : 0,
+          pointHoverRadius: 6,
+          pointBackgroundColor: lineColor,
+          pointHoverBackgroundColor: "#ffffff"
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: "#111926",
+            titleColor: "#7a8aa0",
+            bodyColor: "#e8edf5",
+            bodyFont: { family: "'JetBrains Mono', monospace", size: 12 },
+            borderColor: "rgba(255,255,255,0.08)",
+            borderWidth: 1,
+            padding: 10,
+            displayColors: false,
+            callbacks: {
+              label: function(context) {
+                return ` 總資產估值: $${formatMoney(context.raw, 0)}`;
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            grid: { color: "rgba(255,255,255,0.02)", borderColor: "rgba(255,255,255,0.05)" },
+            ticks: { 
+              color: "#7a8aa0", 
+              font: { size: 10 },
+              maxTicksLimit: range === "1D" ? 8 : 12
+            }
+          },
+          y: {
+            grid: { color: "rgba(255,255,255,0.02)", borderColor: "rgba(255,255,255,0.05)" },
+            ticks: { 
+              color: "#7a8aa0", 
+              font: { family: "'JetBrains Mono', monospace", size: 10 },
+              callback: function(value) {
+                return "$" + formatLargeNumber(value);
+              }
             }
           }
         }
-      },
-      scales: {
-        x: {
-          grid: { color: "rgba(255,255,255,0.02)", borderColor: "rgba(255,255,255,0.05)" },
-          ticks: { 
-            color: "#7a8aa0", 
-            font: { size: 10 },
-            maxTicksLimit: range === "1D" ? 8 : 12 // 限制手機 X 軸標籤最大數量，避免過密重疊
-          }
-        },
-        y: {
-          grid: { color: "rgba(255,255,255,0.02)", borderColor: "rgba(255,255,255,0.05)" },
-          ticks: { color: "#7a8aa0", font: { family: "'JetBrains Mono', monospace", size: 10 } }
-        }
       }
-    }
-  });
+    });
 
-  // 更新最高、最低指標
-  document.getElementById("ms-high").textContent = formatMoney(maxPrice);
-  document.getElementById("ms-low").textContent = formatMoney(minPrice);
-  document.getElementById("ms-vol").textContent = volStr;
+  } catch (err) {
+    if (err.name === "AbortError") {
+      console.log("[資產線圖] 請求已被取消 (AbortError)");
+      return;
+    }
+    console.error("[資產線圖] 繪製投資組合資產趨勢圖失敗:", err);
+  }
+}
+
+function drawEmptyPortfolioChart(ctx, message) {
+  const canvasCtx = ctx.getContext("2d");
+  const width = ctx.clientWidth || 300;
+  const height = ctx.clientHeight || 150;
+  
+  ctx.width = width;
+  ctx.height = height;
+
+  canvasCtx.clearRect(0, 0, width, height);
+  canvasCtx.fillStyle = "#7a8aa0";
+  canvasCtx.font = "14px 'Inter', sans-serif";
+  canvasCtx.textAlign = "center";
+  canvasCtx.textBaseline = "middle";
+  canvasCtx.fillText(message, width / 2, height / 2);
+  
+  const highEl = document.getElementById("p-ms-high");
+  const lowEl = document.getElementById("p-ms-low");
+  const retEl = document.getElementById("p-ms-return");
+  if (highEl) highEl.textContent = "--";
+  if (lowEl) lowEl.textContent = "--";
+  if (retEl) retEl.textContent = "--";
 }
 
 // ==========================================
@@ -1785,6 +2007,7 @@ function removeStock(event, ysym) {
     } else {
       renderWatchlist();
       updatePortfolioOverview();
+      renderPortfolioChart(currentPortfolioRange);
     }
   }
 }
