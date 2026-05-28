@@ -1356,45 +1356,66 @@ async function renderHistoricalChart(ysym, range) {
     currentChart.destroy();
   }
 
-  // 建立 Chart.js 精美的暗色毛玻璃圖表漸層
-  const gradient = ctx.getContext("2d").createLinearGradient(0, 0, 0, 260);
-  gradient.addColorStop(0, "rgba(59, 130, 246, 0.35)");
-  gradient.addColorStop(1, "rgba(59, 130, 246, 0.00)");
-
   let labels = [];
   let prices = [];
-  const currentPrice = realMarketPrices[ysym]?.price || 100.0;
-  
-  // 為了極佳相容性與離線流暢度，系統採取高逼真度真實走勢模擬算法生成歷史走勢
-  const is1D = range === "1D";
-  const twseTimes = ["09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "12:00", "12:30", "13:00", "13:30"];
-  const points = is1D ? twseTimes.length : (range === "1W" ? 7 : (range === "1M" ? 30 : (range === "3M" ? 90 : 12)));
-  let basePrice = currentPrice * (0.95 + Math.random() * 0.08); // 浮動基底
+  let maxPrice = 0;
+  let minPrice = 0;
+  let volStr = "--";
+  let fetchSuccess = false;
 
-  for (let i = 0; i < points; i++) {
-    // 產生布朗運動隨機走勢
-    const change = (Math.random() - 0.48) * 0.015 * basePrice;
-    basePrice += change;
-    
-    // 對齊今日的最終現價
-    if (i === points - 1) {
-      prices.push(currentPrice);
-    } else {
-      prices.push(parseFloat(basePrice.toFixed(2)));
+  // 1. 優先嘗試向專屬代理拉取真正的富果歷史/即時 K 線走勢
+  try {
+    const fetchUrl = `${MY_PROXY_WORKER_URL}/?symbol=${encodeURIComponent(ysym)}&type=candles&range=${range}`;
+    const response = await fetch(fetchUrl);
+    if (response.ok) {
+      const alignedData = await response.json();
+      if (alignedData && alignedData.prices && alignedData.prices.length > 0) {
+        labels = alignedData.labels;
+        prices = alignedData.prices;
+        maxPrice = alignedData.high;
+        minPrice = alignedData.low;
+        volStr = alignedData.vol;
+        fetchSuccess = true;
+      }
     }
-
-    // 走勢橫軸標記
-    if (is1D) {
-      labels.push(twseTimes[i]);
-    } else if (range === "1W") {
-      labels.push(`Day ${i + 1}`);
-    } else if (range === "1M" || range === "3M") {
-      labels.push(`5/${i + 1}`);
-    } else {
-      labels.push(`Month ${i + 1}`);
-    }
+  } catch (err) {
+    console.warn("[真實線圖] 無法載入真實 K 線行情，將優雅降級使用高逼真隨機模擬走勢", err.message);
   }
 
+  // 2. 降級防禦：若 Worker 尚未升級或拉取失敗，降級使用布朗運動模擬演算法
+  if (!fetchSuccess) {
+    const currentPrice = realMarketPrices[ysym]?.price || 100.0;
+    const is1D = range === "1D";
+    const twseTimes = ["09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "12:00", "12:30", "13:00", "13:30"];
+    const points = is1D ? twseTimes.length : (range === "1W" ? 7 : (range === "1M" ? 30 : (range === "3M" ? 90 : 12)));
+    let basePrice = currentPrice * (0.95 + Math.random() * 0.08); // 浮動基底
+
+    for (let i = 0; i < points; i++) {
+      const change = (Math.random() - 0.48) * 0.015 * basePrice;
+      basePrice += change;
+      
+      if (i === points - 1) {
+        prices.push(currentPrice);
+      } else {
+        prices.push(parseFloat(basePrice.toFixed(2)));
+      }
+
+      if (is1D) {
+        labels.push(twseTimes[i]);
+      } else if (range === "1W") {
+        labels.push(`Day ${i + 1}`);
+      } else if (range === "1M" || range === "3M") {
+        labels.push(`5/${i + 1}`);
+      } else {
+        labels.push(`Month ${i + 1}`);
+      }
+    }
+    maxPrice = Math.max(...prices);
+    minPrice = Math.min(...prices);
+    volStr = realMarketPrices[ysym]?.vol || "--";
+  }
+
+  // 3. 開始繪製 Chart.js
   const isUp = prices[prices.length - 1] >= prices[0];
   const lineColor = isUp ? "#f04f5e" : "#10d98a";
   const glowColor = isUp ? "rgba(240, 79, 94, 0.25)" : "rgba(16, 217, 138, 0.25)";
@@ -1414,9 +1435,9 @@ async function renderHistoricalChart(ysym, range) {
         borderWidth: 2.5,
         backgroundColor: chartGradient,
         fill: true,
-        tension: 0.35,
-        pointRadius: range === "1W" || range === "1D" ? 3 : 0,
-        pointHoverRadius: 6,
+        tension: range === "1D" ? 0.15 : 0.35, // 1D 分時圖張力略低以呈現精準波動，歷史圖張力高呈現流暢曲線
+        pointRadius: range === "1W" || range === "1D" ? 1.5 : 0,
+        pointHoverRadius: 5,
         pointBackgroundColor: lineColor,
         pointHoverBackgroundColor: "#ffffff"
       }]
@@ -1445,7 +1466,11 @@ async function renderHistoricalChart(ysym, range) {
       scales: {
         x: {
           grid: { color: "rgba(255,255,255,0.02)", borderColor: "rgba(255,255,255,0.05)" },
-          ticks: { color: "#7a8aa0", font: { size: 10 } }
+          ticks: { 
+            color: "#7a8aa0", 
+            font: { size: 10 },
+            maxTicksLimit: range === "1D" ? 8 : 12 // 限制手機 X 軸標籤最大數量，避免過密重疊
+          }
         },
         y: {
           grid: { color: "rgba(255,255,255,0.02)", borderColor: "rgba(255,255,255,0.05)" },
@@ -1456,11 +1481,10 @@ async function renderHistoricalChart(ysym, range) {
   });
 
   // 更新最高、最低指標
-  const maxPrice = Math.max(...prices);
-  const minPrice = Math.min(...prices);
   document.getElementById("ms-high").textContent = formatMoney(maxPrice);
   document.getElementById("ms-low").textContent = formatMoney(minPrice);
-  document.getElementById("ms-vol").textContent = realMarketPrices[ysym]?.vol || "--";
+  document.getElementById("ms-vol").textContent = volStr;
+}
 }
 
 // ==========================================
