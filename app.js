@@ -1336,6 +1336,8 @@ function updateStockDetailPanel(ysym) {
 // ==========================================
 // 12. 互動式 Chart.js 走勢圖繪製
 // ==========================================
+let chartAbortController = null;
+
 function setRange(range, element) {
   currentChartRange = range;
   
@@ -1352,6 +1354,13 @@ async function renderHistoricalChart(ysym, range) {
   const ctx = document.getElementById("main-chart");
   if (!ctx) return;
 
+  // 1. 中斷前一次尚未完成的 K 線 fetch 請求，徹底防範並行請求與重複渲染導致的網頁卡死
+  if (chartAbortController) {
+    chartAbortController.abort();
+  }
+  chartAbortController = new AbortController();
+  const { signal } = chartAbortController;
+
   if (currentChart) {
     currentChart.destroy();
   }
@@ -1363,10 +1372,10 @@ async function renderHistoricalChart(ysym, range) {
   let volStr = "--";
   let fetchSuccess = false;
 
-  // 1. 優先嘗試向專屬代理拉取真正的富果歷史/即時 K 線走勢
+  // 2. 優先嘗試向專屬代理拉取真正的富果歷史/即時 K 線走勢
   try {
     const fetchUrl = `${MY_PROXY_WORKER_URL}/?symbol=${encodeURIComponent(ysym)}&type=candles&range=${range}`;
-    const response = await fetch(fetchUrl);
+    const response = await fetch(fetchUrl, { signal });
     if (response.ok) {
       const alignedData = await response.json();
       if (alignedData && alignedData.prices && alignedData.prices.length > 0) {
@@ -1379,19 +1388,62 @@ async function renderHistoricalChart(ysym, range) {
       }
     }
   } catch (err) {
+    if (err.name === "AbortError") {
+      console.log("[真實線圖] 請求已被取消 (AbortError)，避開重複渲染。");
+      return; // 這是正常的 abort，直接返回，避免覆蓋後續的繪圖
+    }
     console.warn("[真實線圖] 無法載入真實 K 線行情，將優雅降級使用高逼真隨機模擬走勢", err.message);
   }
 
-  // 2. 降級防禦：若 Worker 尚未升級或拉取失敗，降級使用布朗運動模擬演算法
+  // 3. 降級防禦：若 Worker 尚未升級或拉取失敗，降級使用「確定性」模擬走勢演算法 (Seed-based PRNG)
   if (!fetchSuccess) {
     const currentPrice = realMarketPrices[ysym]?.price || 100.0;
     const is1D = range === "1D";
     const twseTimes = ["09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "12:00", "12:30", "13:00", "13:30"];
-    const points = is1D ? twseTimes.length : (range === "1W" ? 7 : (range === "1M" ? 30 : (range === "3M" ? 90 : 12)));
-    let basePrice = currentPrice * (0.95 + Math.random() * 0.08); // 浮動基底
+    
+    // 獲取當前台北時間，確保在交易時間內只畫「已發生的點」
+    const now = new Date();
+    const twTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Taipei" }));
+    const isWeekday = twTime.getDay() >= 1 && twTime.getDay() <= 5;
+    const currentTotalMin = twTime.getHours() * 60 + twTime.getMinutes();
+    
+    // 生成決定性的隨機數種子，基於「個股代號 + 範圍 + 今日日期」
+    const todayStr = twTime.toISOString().split("T")[0];
+    let seed = 0;
+    const seedStr = ysym + range + todayStr;
+    for (let charIdx = 0; charIdx < seedStr.length; charIdx++) {
+      seed += seedStr.charCodeAt(charIdx);
+    }
+    
+    function getNextRandom() {
+      // 經典線性同餘或正弦 PRNG，確保種子相同時，回傳的亂數序列 100% 相同！
+      const x = Math.sin(seed++) * 10000;
+      return x - Math.floor(x);
+    }
+
+    let filteredTimes = [];
+    if (is1D) {
+      twseTimes.forEach(timeStr => {
+        const [h, m] = timeStr.split(":").map(Number);
+        const pointMin = h * 60 + m;
+        // 如果是交易日，且時間點在未來，且當前時間介於開收盤之間，則過濾掉未來點，呈現「隨時間繪製」的真實感
+        if (isWeekday && currentTotalMin >= 9 * 60 && currentTotalMin < 13 * 60 + 30) {
+          if (pointMin > currentTotalMin) {
+            return; // 未發生的未來點不繪製
+          }
+        }
+        filteredTimes.push(timeStr);
+      });
+      if (filteredTimes.length === 0) {
+        filteredTimes.push("09:00");
+      }
+    }
+
+    const points = is1D ? filteredTimes.length : (range === "1W" ? 7 : (range === "1M" ? 30 : (range === "3M" ? 90 : 12)));
+    let basePrice = currentPrice * (0.95 + getNextRandom() * 0.08); // 浮動基底
 
     for (let i = 0; i < points; i++) {
-      const change = (Math.random() - 0.48) * 0.015 * basePrice;
+      const change = (getNextRandom() - 0.48) * 0.015 * basePrice;
       basePrice += change;
       
       if (i === points - 1) {
@@ -1401,7 +1453,7 @@ async function renderHistoricalChart(ysym, range) {
       }
 
       if (is1D) {
-        labels.push(twseTimes[i]);
+        labels.push(filteredTimes[i]);
       } else if (range === "1W") {
         labels.push(`Day ${i + 1}`);
       } else if (range === "1M" || range === "3M") {
@@ -1415,7 +1467,7 @@ async function renderHistoricalChart(ysym, range) {
     volStr = realMarketPrices[ysym]?.vol || "--";
   }
 
-  // 3. 開始繪製 Chart.js
+  // 4. 開始繪製 Chart.js
   const isUp = prices[prices.length - 1] >= prices[0];
   const lineColor = isUp ? "#f04f5e" : "#10d98a";
   const glowColor = isUp ? "rgba(240, 79, 94, 0.25)" : "rgba(16, 217, 138, 0.25)";
