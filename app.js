@@ -237,11 +237,26 @@ document.addEventListener("DOMContentLoaded", async () => {
   setInterval(updateCurrentTime, 1000);
   
   // 預設將大盤指數加入 realMarketPrices，並開始獲取網路真實行情
-  realMarketPrices["^TWII"] = { ...OFFLINE_PRICES_DATABASE["^TWII"] };
+  realMarketPrices["^TWII"] = { 
+    ...OFFLINE_PRICES_DATABASE["^TWII"], 
+    adjPrev: OFFLINE_PRICES_DATABASE["^TWII"].price - OFFLINE_PRICES_DATABASE["^TWII"].change 
+  };
   watchlist.forEach(item => {
-    realMarketPrices[item.ysym] = OFFLINE_PRICES_DATABASE[item.ysym] 
-      ? { ...OFFLINE_PRICES_DATABASE[item.ysym] }
-      : { price: item.buyPrice, change: 0, chgPct: 0, name: item.name };
+    const offline = OFFLINE_PRICES_DATABASE[item.ysym];
+    if (offline) {
+      realMarketPrices[item.ysym] = {
+        ...offline,
+        adjPrev: offline.price - (offline.change || 0)
+      };
+    } else {
+      realMarketPrices[item.ysym] = {
+        price: item.buyPrice,
+        change: 0,
+        chgPct: 0,
+        name: item.name,
+        adjPrev: item.buyPrice
+      };
+    }
   });
 
   // 智慧休眠與輪詢控制器：偵測使用者是否正在看網頁，以省電、省流量、保障富果額度！
@@ -550,9 +565,11 @@ async function fetchRealNetworkQuotes() {
         if (alignedData && alignedData.price !== undefined) {
           // 合併本地 OFFLINE_PRICES_DATABASE 的未變動長期指標（如本益比、殖利率）做防禦
           const offline = OFFLINE_PRICES_DATABASE[sym] || {};
+          const changeVal = alignedData.change !== undefined ? alignedData.change : (offline.change || 0);
           realMarketPrices[sym] = {
             ...offline,
-            ...alignedData
+            ...alignedData,
+            adjPrev: alignedData.price - changeVal
           };
           successCount++;
         }
@@ -692,11 +709,14 @@ function tickMarketPrices() {
     
     // 大盤小數點不顯示，個股高價位精細顯示
     data.price = sym === "^TWII" ? Math.round(newPrice) : parseFloat(newPrice.toFixed(2));
-    data.change = parseFloat((data.change + (data.price - oldPrice)).toFixed(2));
     
-    // 自動更新漲跌 %
-    if (data.prev) {
-      data.chgPct = parseFloat(((data.price - data.prev) / data.prev * 100).toFixed(2));
+    // 自動更新漲跌與漲跌 %
+    const referencePrev = data.adjPrev !== undefined ? data.adjPrev : data.prev;
+    if (referencePrev) {
+      data.change = parseFloat((data.price - referencePrev).toFixed(2));
+      data.chgPct = parseFloat(((data.price - referencePrev) / referencePrev * 100).toFixed(2));
+    } else {
+      data.change = parseFloat((data.change + (data.price - oldPrice)).toFixed(2));
     }
   });
 
@@ -734,11 +754,13 @@ function updateDomTickers() {
     }
 
     if (changeEl) {
-      const isUp = taiex.change >= 0;
-      changeEl.className = `tc-change ${isUp ? "up" : "down"}`;
-      if (arrowEl) arrowEl.textContent = isUp ? "▲" : "▼";
-      if (valEl) valEl.textContent = Math.abs(taiex.change).toFixed(0);
-      if (pctEl) pctEl.textContent = `(${isUp ? "+" : ""}${taiex.chgPct.toFixed(2)}%)`;
+      const change = taiex.change !== undefined ? taiex.change : 0;
+      const chgPct = taiex.chgPct !== undefined ? taiex.chgPct : 0;
+      changeEl.className = `tc-change ${change > 0 ? "up" : (change < 0 ? "down" : "")}`;
+      if (arrowEl) arrowEl.textContent = change > 0 ? "▲" : (change < 0 ? "▼" : "");
+      if (valEl) valEl.textContent = Math.abs(change).toFixed(0);
+      const pctSign = chgPct > 0 ? "+" : (chgPct < 0 ? "-" : "");
+      if (pctEl) pctEl.textContent = `(${pctSign}${Math.abs(chgPct).toFixed(2)}%)`;
     }
     
     if (timeEl) {
@@ -770,9 +792,17 @@ function updateDomTickers() {
       }
 
       if (chgEl) {
-        const isUp = priceData.change >= 0;
-        chgEl.className = `sc-chg ${isUp ? "up" : "down"}`;
-        chgEl.textContent = `${isUp ? "+" : ""}${priceData.chgPct.toFixed(2)}%`;
+        const change = priceData.change !== undefined ? priceData.change : 0;
+        const chgPct = priceData.chgPct !== undefined ? priceData.chgPct : 0;
+        const changeSign = change > 0 ? "+" : (change < 0 ? "-" : "");
+        const pctSign = chgPct > 0 ? "+" : (chgPct < 0 ? "-" : "");
+        const formattedChg = `${changeSign}${Math.abs(change).toFixed(2)} (${pctSign}${Math.abs(chgPct).toFixed(2)}%)`;
+
+        chgEl.className = `sc-chg ${change > 0 ? "up" : (change < 0 ? "down" : "")}`;
+        chgEl.textContent = formattedChg;
+        
+        // 同步更新 stock-card 的 class 以防漲跌方向變了
+        cardEl.className = `stock-card ${change > 0 ? "up" : (change < 0 ? "down" : "")} ${currentActiveSymbol === sym ? "selected" : ""}`;
       }
     }
   });
@@ -1000,10 +1030,16 @@ function renderWatchlist() {
     const sym = item.ysym;
     const priceData = realMarketPrices[sym] || { price: item.buyPrice, change: 0, chgPct: 0 };
     const isSelected = currentActiveSymbol === sym;
-    const isUp = priceData.change >= 0;
+
+    const change = priceData.change !== undefined ? priceData.change : 0;
+    const chgPct = priceData.chgPct !== undefined ? priceData.chgPct : 0;
+    
+    const changeSign = change > 0 ? "+" : (change < 0 ? "-" : "");
+    const pctSign = chgPct > 0 ? "+" : (chgPct < 0 ? "-" : "");
+    const formattedChg = `${changeSign}${Math.abs(change).toFixed(2)} (${pctSign}${Math.abs(chgPct).toFixed(2)}%)`;
 
     return `
-      <div class="stock-card ${isUp ? "up" : "down"} ${isSelected ? "selected" : ""}" 
+      <div class="stock-card ${change > 0 ? "up" : (change < 0 ? "down" : "")} ${isSelected ? "selected" : ""}" 
            data-symbol="${sym}" 
            onclick="selectStock('${sym}')">
         <button class="sc-remove" onclick="removeStock(event, '${sym}')">✕</button>
@@ -1013,7 +1049,7 @@ function renderWatchlist() {
         </div>
         <div class="sc-right">
           <div class="sc-price">${formatMoney(priceData.price)}</div>
-          <div class="sc-chg ${isUp ? "up" : "down"}">${isUp ? "+" : ""}${priceData.chgPct.toFixed(2)}%</div>
+          <div class="sc-chg ${change > 0 ? "up" : (change < 0 ? "down" : "")}">${formattedChg}</div>
         </div>
       </div>
     `;
@@ -1054,11 +1090,13 @@ function updatePortfolioOverview() {
   }
 
   if (summaryRowEl) {
-    const isUp = calcData.portfolioTotalReturn >= 0;
-    summaryRowEl.className = `tc-change ${isUp ? "up" : "down"}`;
-    if (summaryArrowEl) summaryArrowEl.textContent = isUp ? "▲" : "▼";
-    if (summaryRetValEl) summaryRetValEl.textContent = formatMoney(Math.abs(calcData.portfolioTotalReturn), 0);
-    if (summaryRetPctEl) summaryRetPctEl.textContent = `(${isUp ? "+" : ""}${calcData.portfolioReturnPct.toFixed(2)}%)`;
+    const totalReturn = calcData.portfolioTotalReturn !== undefined ? calcData.portfolioTotalReturn : 0;
+    const returnPct = calcData.portfolioReturnPct !== undefined ? calcData.portfolioReturnPct : 0;
+    summaryRowEl.className = `tc-change ${totalReturn > 0 ? "up" : (totalReturn < 0 ? "down" : "")}`;
+    if (summaryArrowEl) summaryArrowEl.textContent = totalReturn > 0 ? "▲" : (totalReturn < 0 ? "▼" : "");
+    if (summaryRetValEl) summaryRetValEl.textContent = formatMoney(Math.abs(totalReturn), 0);
+    const pctSign = returnPct > 0 ? "+" : (returnPct < 0 ? "-" : "");
+    if (summaryRetPctEl) summaryRetPctEl.textContent = `(${pctSign}${Math.abs(returnPct).toFixed(2)}%)`;
   }
 
   if (summaryCostEl) {
@@ -1079,11 +1117,14 @@ function updatePortfolioOverview() {
   if (valueEl) valueEl.textContent = formatMoney(calcData.totalMarketValue, 0);
 
   if (returnRowEl) {
-    const isUp = calcData.portfolioTotalReturn >= 0;
-    returnRowEl.className = `ph-change ${isUp ? "up" : "down"}`;
-    if (arrowEl) arrowEl.textContent = isUp ? "▲" : "▼";
-    if (returnValEl) returnValEl.textContent = `${isUp ? "+" : ""}${formatMoney(calcData.portfolioTotalReturn, 0)}`;
-    if (returnPctEl) returnPctEl.textContent = `(${isUp ? "+" : ""}${calcData.portfolioReturnPct.toFixed(2)}%)`;
+    const totalReturn = calcData.portfolioTotalReturn !== undefined ? calcData.portfolioTotalReturn : 0;
+    const returnPct = calcData.portfolioReturnPct !== undefined ? calcData.portfolioReturnPct : 0;
+    returnRowEl.className = `ph-change ${totalReturn > 0 ? "up" : (totalReturn < 0 ? "down" : "")}`;
+    if (arrowEl) arrowEl.textContent = totalReturn > 0 ? "▲" : (totalReturn < 0 ? "▼" : "");
+    const retSign = totalReturn > 0 ? "+" : (totalReturn < 0 ? "-" : "");
+    if (returnValEl) returnValEl.textContent = `${retSign}${formatMoney(Math.abs(totalReturn), 0)}`;
+    const pctSign = returnPct > 0 ? "+" : (returnPct < 0 ? "-" : "");
+    if (returnPctEl) returnPctEl.textContent = `(${pctSign}${Math.abs(returnPct).toFixed(2)}%)`;
   }
   
   if (updatedEl) {
@@ -1222,10 +1263,13 @@ function updateStockDetailPanel(ysym) {
   const updatedEl = document.getElementById("h-updated");
 
   if (changeEl) {
-    changeEl.className = `hero-change ${isUp ? "up" : "down"}`;
-    if (arrowEl) arrowEl.textContent = isUp ? "▲" : "▼";
-    if (chgValEl) chgValEl.textContent = Math.abs(priceData.change).toFixed(2);
-    if (chgPctEl) chgPctEl.textContent = `(${isUp ? "+" : ""}${priceData.chgPct.toFixed(2)}%)`;
+    const change = priceData.change !== undefined ? priceData.change : 0;
+    const chgPct = priceData.chgPct !== undefined ? priceData.chgPct : 0;
+    changeEl.className = `hero-change ${change > 0 ? "up" : (change < 0 ? "down" : "")}`;
+    if (arrowEl) arrowEl.textContent = change > 0 ? "▲" : (change < 0 ? "▼" : "");
+    if (chgValEl) chgValEl.textContent = Math.abs(change).toFixed(2);
+    const pctSign = chgPct > 0 ? "+" : (chgPct < 0 ? "-" : "");
+    if (chgPctEl) chgPctEl.textContent = `(${pctSign}${Math.abs(chgPct).toFixed(2)}%)`;
   }
   
   if (updatedEl) {
