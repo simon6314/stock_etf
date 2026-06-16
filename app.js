@@ -364,8 +364,25 @@ async function fetchDividendsDatabase() {
 // 新增：透過 Yahoo Finance 真實 API 自動獲取最新與未來的配息，徹底免人工維護！
 // =============================================================
 async function fetchLiveDividends(ysym) {
+  // 檢查本地快取是否存在且未過期（快取 12 小時 = 43200000 毫秒）
+  const cacheKey = `div_cache_${ysym}`;
+  const cached = localStorage.getItem(cacheKey);
+  if (cached) {
+    try {
+      const cacheData = JSON.parse(cached);
+      const now = Date.now();
+      if (now - cacheData.timestamp < 43200000) {
+        console.log(`[配息快取] ${ysym} 使用本地快取配息數據，免重複發送 API`);
+        DIVIDEND_DATABASE[ysym] = cacheData.records;
+        return true;
+      }
+    } catch (e) {
+      // 快取解析失敗，降級進行網路請求
+    }
+  }
+
   try {
-    const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${ysym}?period1=0&period2=9999999999&interval=1d&events=div`;
+    const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${ysym}?period1=0&period2=9999999999&interval=1d&events=div&t=${Date.now()}`;
     
     // 多重 CORS 代理備份策略，確保 100% 成功
     const proxies = [
@@ -411,6 +428,13 @@ async function fetchLiveDividends(ysym) {
       if (records.length > 0) {
         // 將最新真實配息數據寫入全域變數，覆蓋或新增本地資料
         DIVIDEND_DATABASE[ysym] = records.sort((a, b) => new Date(b.date) - new Date(a.date));
+        
+        // 寫入本地快取，記錄當前時間戳記
+        localStorage.setItem(cacheKey, JSON.stringify({
+          timestamp: Date.now(),
+          records: DIVIDEND_DATABASE[ysym]
+        }));
+        
         console.log(`[自動更新] 成功透過 ${successProxy.split('?')[0]} 為 ${ysym} 更新 ${records.length} 筆最新除息紀錄！`);
         return true;
       }
