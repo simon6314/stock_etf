@@ -347,7 +347,7 @@ function switchMobileTab(tab) {
 // 動態從同目錄下的 JSON 檔案拉取最新真實配息資料，實現 GitHub Pages 隨時輕鬆更新
 async function fetchDividendsDatabase() {
   try {
-    const response = await fetch("./dividends.json?v=20260526_1");
+    const response = await fetch("./dividends.json?t=" + Date.now(), { cache: "no-store" }); // 每次都讀最新檔案
     if (!response.ok) throw new Error("讀取線上配息資料庫失敗");
     const data = await response.json();
     if (data && typeof data === "object") {
